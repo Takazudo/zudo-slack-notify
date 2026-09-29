@@ -1,0 +1,39 @@
+---
+title: Create the Slack app
+description: Create the bot from the manifest, install it, and collect the bot token and channel IDs.
+sidebar_position: 1
+---
+
+The relay needs one Slack app with one bot scope: `chat:write`.
+
+## Create it from the manifest
+
+1. Open the Slack app dashboard and choose **Create New App**, then **From a manifest**.
+2. Pick the workspace and paste the contents of `app/slack-app-manifest.json`.
+3. Review and create the app.
+
+The manifest declares a bot user named `zudo-slack-notify`, the single bot scope `chat:write`, no event subscriptions, no interactivity, no Socket Mode, and no token rotation.
+
+:::tip[Why only chat:write]
+`chat:write` lets the bot post only into channels it has been invited to. Adding `chat:write.public` or any read scope widens what a leaked bot token could do, and the Worker never needs it.
+:::
+
+## Install and copy the bot token
+
+1. Choose **Install to Workspace** and approve.
+2. Under **OAuth and Permissions**, copy the **Bot User OAuth Token**. It starts with `xoxb-`.
+
+This token goes only into the operator store as `SLACK_BOT_TOKEN`. Callers never receive it.
+
+## Invite the bot and copy channel IDs
+
+For each destination channel:
+
+1. Invite the bot: in the channel, run `/invite @zudo-slack-notify`.
+2. Copy the channel ID: open the channel details and copy the ID at the bottom. It looks like `C0123456789` (public), `G…` (private), or `D…` (direct message).
+
+If the bot is not a member, Slack answers `not_in_channel` and the API returns `slack_rejected`. See [Troubleshooting](../../operations/troubleshooting/).
+
+## Choose target aliases
+
+Pick short lowercase kebab-case aliases, for example `dev` and `releases`. An alias matches `^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$` and is at most 64 characters. The mapping from alias to channel ID becomes the `SLACK_TARGETS` secret in the next step.

@@ -1,0 +1,96 @@
+---
+title: POST /v1/notify
+description: Request schema, limits, rendering, threading, and the success response.
+sidebar_position: 1
+---
+
+Posts one notification to the Slack channel behind a target alias.
+
+## Request
+
+```http
+POST /v1/notify HTTP/1.1
+Host: zudo-slack-notify-app.zudolab.dev
+Authorization: Bearer <your-relay-key>
+Content-Type: application/json; charset=utf-8
+
+{
+  "target": "releases",
+  "kind": "action_required",
+  "title": "npm staging is ready for review",
+  "message": "Checks passed. Complete the existing manual approval step.",
+  "source": "my-project / local agent",
+  "fields": [{ "label": "Version", "value": "1.2.3" }],
+  "links": [{ "label": "Review", "url": "https://example.com/review" }]
+}
+```
+
+- `Authorization` must be `Bearer` followed by the relay key (1 to 256 printable ASCII characters).
+- `Content-Type` must be `application/json`, optionally with `charset=utf-8`.
+- Compressed request bodies are rejected: `Content-Encoding` must be absent or `identity`.
+- The body is UTF-8 JSON of at most **16 KiB**.
+
+## Fields
+
+Unknown top-level fields are rejected. All text is nonblank and free of control characters (tab, newline, and carriage return are allowed).
+
+| Field      | Type   | Required | Limit and rules                                                                        |
+| ---------- | ------ | -------- | -------------------------------------------------------------------------------------- |
+| `target`   | string | yes      | At most 64 characters; lowercase kebab-case alias configured in `SLACK_TARGETS`        |
+| `message`  | string | yes      | At most 2000 characters                                                                |
+| `kind`     | string | no       | `info` (default), `success`, `warning`, `error`, `action_required`                     |
+| `title`    | string | no       | At most 120 characters                                                                 |
+| `source`   | string | no       | At most 100 characters; a caller-supplied label, not a verified identity               |
+| `fields`   | array  | no       | At most 6 objects of `label` (at most 60 characters) and `value` (at most 300)         |
+| `links`    | array  | no       | At most 3 objects of `label` (at most 60, no pipe or newline) and `url`                |
+| `threadTs` | string | no       | Parent message timestamp matching `^\d{10,16}\.\d{6}$`, for example `1750000000.000001` |
+
+Link URLs must be absolute `https://` URLs of at most 500 characters, with no whitespace, `<`, `>`, `|`, or backslash, and no embedded username or password. Field and link objects reject unknown keys.
+
+## Rendering
+
+The Worker builds the Slack blocks; callers never send Block Kit.
+
+| Element                                | Slack shape                                            | Limit after escaping |
+| -------------------------------------- | ------------------------------------------------------ | -------------------- |
+| Header: `Kind: Title` (or just `Kind`) | `header` block                                         | 150 characters       |
+| Message                                | `section` block                                        | 3000 characters      |
+| Each field, as `label` newline `value` | one `section` block with a `fields` list               | 2000 characters each |
+| Links                                  | one `section` block, `<url\|label>` per line           | 3000 characters      |
+| Source                                 | `context` block, `Source: …`                           | 2000 characters      |
+| Fallback text                          | top-level `text` for notifications and accessibility   | 40000 characters     |
+
+The kind labels are `Info`, `Success`, `Warning`, `Error`, and `Action required`. The message has at most 50 blocks.
+
+Text is escaped for Slack (`&`, `<`, `>`) before the limits are checked, so text near a limit that contains many of those characters can exceed it after escaping and fails with `rendered_message_too_long`. Messages are sent with `parse: none`, `link_names: false`, `unfurl_links: false`, `unfurl_media: false`, and `reply_broadcast: false`, so a caller cannot trigger mentions, `@channel`, unfurls, or channel broadcasts. Only validated links use Slack link markup.
+
+## Threading with threadTs
+
+Every success response returns `ts`, the Slack timestamp of the posted message. To reply in that message's thread, send a later notification to the **same target** with `threadTs` set to that `ts`:
+
+```json
+{ "target": "releases", "message": "Approved and published.", "threadTs": "1750000000.000001" }
+```
+
+Replies are never broadcast to the channel. If the parent cannot take replies Slack answers with a rejection such as `cannot_reply_to_message`, which surfaces as `slack_rejected`. The API does not remember receipts; the caller keeps the `ts`.
+
+## Success response
+
+`200 OK`:
+
+```json
+{
+  "ok": true,
+  "delivery": "sent",
+  "requestId": "0d6c1c53-6d6c-4f7f-9a3e-7f9d5a5b7d11",
+  "target": "releases",
+  "channel": "C0123456789",
+  "ts": "1750000000.000001"
+}
+```
+
+`delivery: "sent"` is returned only after the Worker has verified Slack's receipt: `ok: true`, the same channel it posted to, and a well-formed `ts`. Anything less is reported as `unknown`. See [Delivery semantics](./delivery-semantics/).
+
+## Order of checks
+
+A request is refused at the first check it fails, in this order: route and method, Worker configuration (`503 server_misconfigured`), authentication, content type and encoding, body size and JSON, validation and rendering, target lookup, then the single Slack attempt. Because configuration comes first, an unwired Worker never authenticates anyone or contacts Slack. See the [error catalog](./errors/) for every code.

@@ -1,0 +1,75 @@
+---
+title: Error catalog
+description: Every status and error code the API returns, with delivery state and what to do.
+sidebar_position: 2
+---
+
+Every failure has the same envelope:
+
+```json
+{
+  "ok": false,
+  "delivery": "not_sent",
+  "requestId": "0d6c1c53-6d6c-4f7f-9a3e-7f9d5a5b7d11",
+  "error": { "code": "unauthorized", "message": "A valid bearer token is required." },
+  "retryable": false
+}
+```
+
+- `delivery` is `not_sent` or `unknown`. See [Delivery semantics](./delivery-semantics/).
+- `retryable` is `true` only for Slack rate limiting; nothing else is safe to retry blindly.
+- `retryAfterSeconds` appears only on `429`, alongside a `Retry-After` header.
+
+## Requests refused before Slack is contacted
+
+All of these are `delivery: not_sent`, `retryable: false`.
+
+| Status | Code                           | Cause and fix                                                                                                                       |
+| ------ | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| 404    | `not_found`                    | Path is not `/healthz` or `/v1/notify`.                                                                                             |
+| 405    | `method_not_allowed`           | Wrong method. Response has `Allow: POST` (or `GET` for `/healthz`).                                                                 |
+| 503    | `server_misconfigured`         | A Worker secret is missing or malformed. Checked before authentication. See [Troubleshooting](../operations/troubleshooting/).     |
+| 401    | `unauthorized`                 | Missing or wrong bearer key. Response has `WWW-Authenticate: Bearer`.                                                               |
+| 503    | `auth_unavailable`             | The Worker could not run the authentication check. Retry later.                                                                     |
+| 415    | `unsupported_media_type`       | `Content-Type` is not `application/json` (optional `charset=utf-8`).                                                                |
+| 415    | `unsupported_content_encoding` | The body is compressed. Send it uncompressed.                                                                                       |
+| 413    | `payload_too_large`            | The body exceeds 16 KiB.                                                                                                            |
+| 400    | `invalid_json`                 | The body is not valid UTF-8 JSON.                                                                                                   |
+| 400    | `invalid_request`              | A field is missing, too long, unknown, or malformed. The `message` names the field. Includes a bad `target` shape or `threadTs`.   |
+| 400    | `rendered_message_too_long`    | The text passes field limits but exceeds a Slack limit after escaping, or produces more than 50 blocks. Shorten the text.          |
+| 403    | `target_not_allowed`           | The alias is well formed but not in `SLACK_TARGETS`.                                                                                |
+| 500    | `internal_error`               | The Worker failed while preparing the message. Nothing was sent.                                                                    |
+
+## Slack outcomes
+
+One Slack request is made, with a 10 second deadline and redirects never followed.
+
+| Status | Code                   | `delivery`  | `retryable` | Cause                                                                                                                 |
+| ------ | ---------------------- | ----------- | ----------- | --------------------------------------------------------------------------------------------------------------------- |
+| 200    | none (success)         | `sent`      | n/a         | Slack acknowledged with a valid receipt.                                                                              |
+| 429    | `slack_rate_limited`   | `not_sent`  | `true`      | Slack returned `429`, or an `ok: false` body with `ratelimited` or `rate_limited`. Honor `Retry-After`.               |
+| 502    | `slack_rejected`       | `not_sent`  | `false`     | Slack explicitly refused the message. The `message` includes Slack's error string, for example `(not_in_channel)`.    |
+| 502    | `slack_delivery_unknown` | `unknown` | `false`     | Slack answered with a `5xx`, an unexpected `3xx` redirect, or an `ok: false` error not on the permanent-rejection list. |
+| 502    | `slack_invalid_response` | `unknown` | `false`     | The Slack response was unreadable, over 128 KiB, or lacked a valid receipt (wrong channel or malformed `ts`).         |
+| 502    | `slack_network_error`  | `unknown`   | `false`     | The connection to Slack failed after the request was made.                                                            |
+| 504    | `slack_timeout`        | `unknown`   | `false`     | Slack did not confirm within 10 seconds.                                                                              |
+
+## Slack rejections that map to slack_rejected
+
+These Slack error strings are treated as definite refusals with no message posted. Anything else that Slack reports, including `unknown`, `internal_error`, `fatal_error`, and `service_unavailable`, becomes `slack_delivery_unknown`, because Slack documents possible partial success for them.
+
+- **Channel and membership:** `channel_not_found`, `not_in_channel`, `is_archived`, `cannot_reply_to_message`, `messages_tab_disabled`, `restricted_action`, `restricted_action_non_threadable_channel`, `restricted_action_read_only_channel`, `restricted_action_thread_locked`, `restricted_action_thread_only_channel`, `no_permission`
+- **Token and app:** `invalid_auth`, `not_authed`, `token_expired`, `token_revoked`, `account_inactive`, `missing_scope`, `not_allowed_token_type`, `access_denied`, `accesslimited`, `app_access_restricted`, `team_access_not_granted`, `team_not_found`, `ekm_access_denied`, `enterprise_is_restricted`, `two_factor_setup_required`
+- **Request shape:** `invalid_arg_name`, `invalid_arguments`, `invalid_array_arg`, `invalid_blocks`, `invalid_blocks_format`, `invalid_charset`, `invalid_form_data`, `invalid_post_type`, `missing_post_type`, `markdown_text_conflict`, `msg_blocks_too_long`, `no_text`, `message_limit_exceeded`
+- **Deprecated:** `deprecated_endpoint`, `method_deprecated`
+
+Most of these are operator problems (fix the Slack app, token, or channel membership), not caller problems.
+
+## Rate limits and Retry-After
+
+A `429` response carries:
+
+- `Retry-After`: Slack's value, passed through. It is either whole seconds or an HTTP date; if Slack sent neither, the Worker substitutes `60`.
+- `retryAfterSeconds`: the same wait as a number (dates are converted, never below 0). It is omitted when the value is too large to represent exactly, in which case rely on the header.
+
+The Worker returns the full delay Slack asked for and never shortens it. It does not sleep and retry itself. Wait at least the interval before deliberately sending again.

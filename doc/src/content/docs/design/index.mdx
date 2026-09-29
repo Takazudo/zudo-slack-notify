@@ -1,0 +1,54 @@
+---
+title: Design Decisions
+description: Why the relay is shaped the way it is, and what would justify changing it.
+sidebar_position: 6
+---
+
+## The boundary
+
+The API delivers a notification to a named destination. It knows nothing about npm publishing, the agent session, source code, or release approval state. A local workflow turns its real status into a small JSON message. A new use case usually needs a new payload, not a new Worker endpoint.
+
+## A Worker-owned Slack bot token
+
+The Worker keeps the Slack credential in one place and exposes a stable interface. Callers receive only the relay key, so a leaked sender file cannot call arbitrary Slack methods. The trade is explicit: one shared caller credential and one workspace, and every holder can use every configured target. Split credentials and per-target permissions only when different trust levels appear.
+
+A bot token with `chat:write` and `chat.postMessage` also returns a `ts`, which enables threading. An incoming webhook is smaller, but its channel is fixed by installation and it returns no `ts`. Several small use cases with named destinations favor one bot token plus aliases.
+
+## Synchronous and stateless
+
+The agent can wait a few seconds. Awaiting Slack makes the response meaningful and avoids a queue, scheduler, or database for a low-volume personal service. The Worker makes exactly one Slack attempt per valid request and returns a receipt only after validating Slack's acknowledgement.
+
+The send is not deferred with `waitUntil`: background work has a limited lifetime, and a premature success response would be a lie.
+
+The consequences are accepted: no offline buffering, no history, no deduplication, no rate queue, no automatic recovery. Slack is the visible history.
+
+## Fail closed and secrets
+
+All three values (`NOTIFY_API_KEY`, `SLACK_BOT_TOKEN`, `SLACK_TARGETS`) are Worker secrets. `SLACK_TARGETS` is a secret and not a `[vars]` entry because this repository is public and channel IDs stay out of git. If any secret is missing or malformed the API answers `503 server_misconfigured` before authenticating or contacting Slack. That is what lets the first deploy happen before the Slack app exists.
+
+## Delivery honesty
+
+Responses distinguish `sent`, `not_sent`, and `unknown`, and `Retry-After` is returned in full rather than capped, because retrying sooner than Slack asked would be wrong. The Worker never sleeps and retries internally. See [Delivery semantics](../api/delivery-semantics/).
+
+## Message representation
+
+Callers provide a title, body, kind, optional source, small label/value fields, and links. The Worker builds the blocks. Caller text is literal, with no raw Block Kit and no mention controls, so task text cannot become an accidental `@channel`. Links are HTTPS with separate labels. There are no buttons or callbacks, which avoids implying that clicking something approved a release. The top-level `text` carries the content for fallback and accessibility.
+
+`source` is supplied by the caller for readability and is not a verified identity. A `success` kind is the agent's claim, not an independently verified result.
+
+## The approval boundary
+
+The notification skill never treats `sent` as permission to act. A Slack reply, reaction, or elapsed time is not observed by this service, so none can unblock an agent.
+
+## Sensible later additions
+
+Add these only when a concrete need appears.
+
+| Need                                             | Next change                                                                                                 |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| Projects need different channel permissions      | Per-caller tokens with target allowlists and rotation                                                       |
+| Many simultaneous notifications                  | A queue with rate scheduling and explicit accepted-versus-delivered semantics                               |
+| Safe retry after local restarts                  | A durable request ledger with payload hashes and a duplicate policy; external-write uncertainty remains    |
+| Approve releases within Slack                    | A separate verified interactivity endpoint, authorized approvers, immutable candidate binding, and expiry  |
+| Update one long-running task's message           | A restricted update endpoint that owns and records message receipts                                         |
+| Multiple workspaces                              | Per-destination workspace credentials, without widening the caller's API surface                            |

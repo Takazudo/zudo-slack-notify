@@ -1,8 +1,23 @@
 ---
 title: Getting Started
-sidebar_position: 1
+description: Stand up your own zudo-slack-notify deployment, from the Slack app to the first message.
+sidebar_position: 2
 ---
 
-Welcome to Doc. Choose a topic below to get started.
+This walk-through takes a fresh checkout to a delivered message. The Worker deploys before Slack is wired, and fails closed until all three secrets exist, so the order below is safe.
+
+1. [Create the Slack app](./slack-app/) from the manifest, install it, and collect the bot token and channel IDs.
+2. [Configure secrets and deploy](./secrets-and-deploy/): generate the relay key, fill the operator store, run `pnpm ops:push-secrets`, and deploy.
+3. [Send the first message](./first-message/) with the CLI and mark the deployment as wired.
+
+:::note[Placeholders]
+Every value in these pages is a placeholder: `C0123456789`, `xoxb-…`, `<your-relay-key>`. Real channel IDs, tokens, and keys never go into git, issues, or logs.
+:::
+
+## Prerequisites
+
+- Node.js 24 or later and pnpm (`pnpm install` at the repository root).
+- A Slack workspace where you may install an app.
+- A Cloudflare account that owns the `zudolab.dev` zone, if you deploy the same domains. Forks change the `routes` entries in `app/wrangler.toml` and `doc/wrangler.toml`.
 
 <CategoryNav category="getting-started" />

@@ -1,0 +1,75 @@
+---
+title: Development
+description: Repository layout, test tiers, CI and deploy workflows, and the pre-push suite.
+sidebar_position: 8
+---
+
+## Layout
+
+```text
+app/                 Worker API + CLI (Worker: zudo-slack-notify-app)
+  src/               index.ts (handler), notification.ts (validation and rendering)
+  cli/notify.ts      CLI sender
+  tests/             unit, CLI, and workerd tests
+  examples/          sample payloads
+  slack-app-manifest.json
+  wrangler.toml
+doc/                 zudo-doc site (Worker: zudo-slack-notify)
+skills/notify-slack/ Claude Code skill
+scripts/             push-worker-secrets.mjs, smoke.sh, run-b4push.sh
+```
+
+The repository is a pnpm workspace (pnpm 11, Node 24) with two members, `app` and `doc`.
+
+## Local Worker
+
+Copy `app/.dev.vars.example` to `app/.dev.vars`, replace the placeholders, and run:
+
+```sh
+pnpm --filter zudo-slack-notify-app dev
+```
+
+Point a sender at it with `ZUDO_SLACK_NOTIFY_URL=http://127.0.0.1:8787/v1/notify`. Never commit `.dev.vars`.
+
+## Test tiers
+
+| Tier             | Command                                          | What it covers                                                                                  |
+| ---------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| Unit and CLI     | `pnpm --filter zudo-slack-notify-app test`       | Validation, rendering, handler and CLI behavior against an injected fake Slack. No real network. |
+| workerd          | `pnpm --filter zudo-slack-notify-app test:workerd` | The Worker in the real Workers runtime, including native fetch handling.                        |
+| Post-deploy smoke | `scripts/smoke.sh`                              | The deployed API: `/healthz`, and `401` (or `503` before wiring) for an unauthenticated POST.  |
+
+The suites supply their own fakes and never need real credentials or channel IDs.
+
+## Pre-push suite
+
+```sh
+pnpm b4push
+```
+
+Runs `scripts/run-b4push.sh`: frozen install, Prettier check, markdown format check, typecheck, tests, and build. It collects failures so one run reports every broken step. The order mirrors CI.
+
+## Formatting
+
+- `pnpm format` and `pnpm format:check` run Prettier.
+- `pnpm format:md` and `pnpm format:md:check` run `@takazudo/mdx-formatter` over every `.md` and `.mdx` file, including these pages.
+
+## CI and deploy workflows
+
+| Workflow         | Trigger        | Purpose                                                                         |
+| ---------------- | -------------- | ------------------------------------------------------------------------------- |
+| `ci.yml`         | pull requests and pushes | Format, typecheck, test, and build.                                   |
+| `deploy-app.yml` | push to `main` | Deploy the Worker API.                                 |
+| `deploy-doc.yml` | push to `main` | Build and deploy this docs site as static assets.                               |
+
+The deploy workflows skip themselves when the `CLOUDFLARE_API_TOKEN` or `CLOUDFLARE_ACCOUNT_ID` repository secret is absent, so forks and unconfigured clones stay green.
+
+## Editing these docs
+
+```sh
+pnpm --filter zudo-slack-notify-doc dev     # dev server
+pnpm --filter zudo-slack-notify-doc build   # static export
+pnpm --filter zudo-slack-notify-doc check:links
+```
+
+`check:links` fails on any broken internal link. Sidebar order comes from `sidebar_position` in each page's frontmatter, and each top-level folder's `index.mdx` names its category.
