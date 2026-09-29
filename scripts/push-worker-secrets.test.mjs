@@ -178,9 +178,7 @@ describe("push-worker-secrets", () => {
   it("errors clearly without a configured or readable file", async () => {
     const h = harness();
     expect(await h.run([])).toBe(2);
-    expect(h.err.join("")).toContain(
-      "pass --env-file <path> or set ZUDO_SLACK_NOTIFY_WORKER_ENV",
-    );
+    expect(h.err.join("")).toContain("pass --env-file <path> or set ZUDO_SLACK_NOTIFY_WORKER_ENV");
     expect(await h.run(["--env-file", path.join(dir, "missing.env")])).toBe(2);
     expect(await h.run(["--bogus"])).toBe(2);
   });

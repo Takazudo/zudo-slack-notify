@@ -48,9 +48,7 @@ describe("smoke.sh app", () => {
     for (const env of [{ APP_BASE_URL: undefined }, { APP_BASE_URL: "" }]) {
       const r = await smoke("app", env);
       expect(r.code).not.toBe(0);
-      expect(r.output).toContain(
-        "SMOKE FAIL: APP_BASE_URL is required (the deployed API origin)",
-      );
+      expect(r.output).toContain("SMOKE FAIL: APP_BASE_URL is required (the deployed API origin)");
     }
   });
 
@@ -104,9 +102,7 @@ describe("smoke.sh doc", () => {
     for (const env of [{ DOC_BASE_URL: undefined }, { DOC_BASE_URL: "" }]) {
       const r = await smoke("doc", env);
       expect(r.code).not.toBe(0);
-      expect(r.output).toContain(
-        "SMOKE FAIL: DOC_BASE_URL is required (the deployed docs origin)",
-      );
+      expect(r.output).toContain("SMOKE FAIL: DOC_BASE_URL is required (the deployed docs origin)");
     }
   });
 
