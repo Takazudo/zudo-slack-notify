@@ -1,9 +1,0 @@
-{
-  "target": "dev",
-  "kind": "success",
-  "title": "Preview deployment is ready",
-  "message": "The preview build is ready for visual review.",
-  "source": "example-project / local agent",
-  "fields": [{ "label": "Environment", "value": "Preview" }],
-  "links": [{ "label": "Open preview", "url": "https://example.com/preview" }]
-}

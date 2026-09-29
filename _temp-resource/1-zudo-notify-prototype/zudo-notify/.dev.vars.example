@@ -1,9 +1,0 @@
-# Copy to .dev.vars for local development, then replace both placeholders.
-# Do not commit .dev.vars or any file containing real credentials.
-# The test suite supplies fake values and never needs a real Slack token.
-NOTIFY_API_KEY="REPLACE_WITH_64_HEX_CHAR_RANDOM_VALUE"
-SLACK_BOT_TOKEN="xoxb-REPLACE_WITH_YOUR_BOT_TOKEN"
-
-# SLACK_TARGETS is non-secret configuration in wrangler.toml.
-# Local agents need only NOTIFY_API_KEY and the Worker URL.
-# Never give local agent callers SLACK_BOT_TOKEN or a Cloudflare deploy token.
