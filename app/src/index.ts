@@ -1,13 +1,12 @@
 import {
   buildSlackMessage,
-  CHANNEL_ID_PATTERN,
+  parseSlackTargets,
+  RELAY_KEY_PATTERN,
+  SLACK_BOT_TOKEN_PATTERN,
   SLACK_TIMESTAMP_PATTERN,
-  TARGET_ALIAS_PATTERN,
   validateNotification,
   ValidationError,
 } from "./notification.ts";
-
-export { buildSlackMessage, validateNotification, ValidationError } from "./notification.ts";
 
 /**
  * All three values are Worker secrets (`wrangler secret put`), never `[vars]`:
@@ -98,37 +97,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function readConfig(env: Env): Config | undefined {
   if (
     typeof env.NOTIFY_API_KEY !== "string" ||
-    !/^[\x21-\x7e]{32,256}$/.test(env.NOTIFY_API_KEY) ||
+    !RELAY_KEY_PATTERN.test(env.NOTIFY_API_KEY) ||
     typeof env.SLACK_BOT_TOKEN !== "string" ||
-    !/^xoxb-[A-Za-z0-9-]{5,495}$/.test(env.SLACK_BOT_TOKEN) ||
-    typeof env.SLACK_TARGETS !== "string" ||
-    env.SLACK_TARGETS.length > MAX_BODY_BYTES
+    !SLACK_BOT_TOKEN_PATTERN.test(env.SLACK_BOT_TOKEN)
   )
     return undefined;
-  let targets: unknown;
-  try {
-    targets = JSON.parse(env.SLACK_TARGETS);
-  } catch {
-    return undefined;
-  }
-  if (!isRecord(targets)) return undefined;
-  const entries = Object.entries(targets);
-  if (!entries.length || entries.length > 100) return undefined;
-  for (const [alias, channel] of entries) {
-    if (
-      alias.length > 64 ||
-      !TARGET_ALIAS_PATTERN.test(alias) ||
-      typeof channel !== "string" ||
-      !CHANNEL_ID_PATTERN.test(channel)
-    ) {
-      return undefined;
-    }
-  }
-  return {
-    apiKey: env.NOTIFY_API_KEY,
-    slackToken: env.SLACK_BOT_TOKEN,
-    targets: targets as Record<string, string>,
-  };
+  const parsed = parseSlackTargets(env.SLACK_TARGETS);
+  if ("problem" in parsed) return undefined;
+  return { apiKey: env.NOTIFY_API_KEY, slackToken: env.SLACK_BOT_TOKEN, targets: parsed.targets };
 }
 
 async function authenticates(header: string | null, secret: string): Promise<boolean> {

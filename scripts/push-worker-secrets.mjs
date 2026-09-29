@@ -4,10 +4,16 @@
 //   pnpm ops:push-secrets [--env-file <path>] [--dry-run]
 // Default file: $DROPBOX_ROOT/env/zudo-slack-notify/credentials/worker.env
 import { spawn as nodeSpawn } from "node:child_process";
+import { realpathSync } from "node:fs";
 import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  parseSlackTargets,
+  RELAY_KEY_PATTERN,
+  SLACK_BOT_TOKEN_PATTERN,
+} from "../app/src/notification.ts";
 
 const KEYS = ["NOTIFY_API_KEY", "SLACK_BOT_TOKEN", "SLACK_TARGETS"];
 const APP_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "app");
@@ -30,33 +36,21 @@ export function parseEnvFile(text) {
 }
 
 // Returns an error message (never containing the value) or null when valid.
+// Uses the Worker's own checks, so a value that passes here cannot leave the
+// deployed Worker failing closed with 503 server_misconfigured.
 export function validate(name, value) {
   if (name === "NOTIFY_API_KEY") {
-    return /^[\x21-\x7e]{32,256}$/.test(value)
+    return RELAY_KEY_PATTERN.test(value)
       ? null
       : "must be 32-256 printable ASCII characters without whitespace";
   }
   if (name === "SLACK_BOT_TOKEN") {
-    return /^xoxb-\S+$/.test(value) ? null : "must be a Slack bot token starting with xoxb-";
+    return SLACK_BOT_TOKEN_PATTERN.test(value)
+      ? null
+      : "must be a Slack bot token: xoxb- followed by 5-495 letters, digits, or dashes";
   }
-  let parsed;
-  try {
-    parsed = JSON.parse(value);
-  } catch {
-    return "must be valid JSON";
-  }
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    return "must be a JSON object of alias -> channel ID";
-  }
-  const entries = Object.entries(parsed);
-  if (entries.length === 0) return "must contain at least one alias";
-  for (const [alias, channel] of entries) {
-    if (!alias.trim()) return "contains an empty alias";
-    if (typeof channel !== "string" || !/^[CGD][A-Z0-9]{8,63}$/.test(channel)) {
-      return `alias "${alias}" does not map to a valid Slack channel ID`;
-    }
-  }
-  return null;
+  const result = parseSlackTargets(value);
+  return "problem" in result ? result.problem : null;
 }
 
 function parseArgs(argv) {
@@ -179,6 +173,15 @@ export async function main({
   }
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  process.exitCode = await main();
+function invokedDirectly() {
+  if (!process.argv[1]) return false;
+  // Node realpaths import.meta.url but not argv[1]; compare real paths so a run
+  // through a symlinked checkout does not silently do nothing.
+  try {
+    return realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
 }
+
+if (invokedDirectly()) process.exitCode = await main();

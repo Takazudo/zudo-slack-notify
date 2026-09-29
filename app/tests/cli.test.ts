@@ -1,4 +1,7 @@
 import { spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync, symlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { main, parseArgs, sendNotification, validateEndpoint } from "../cli/notify.ts";
@@ -208,6 +211,26 @@ describe("sendNotification", () => {
     expect(result.exitCode).toBe(4);
     expect((result.body.error as { code: string }).code).toBe("client_timeout");
   });
+
+  test("a timeout while the response body streams is still client_timeout", async () => {
+    const result = await sendNotification(payload, {
+      endpoint,
+      apiKey,
+      timeoutMs: 10,
+      fetchImpl: async (_url, init) => {
+        const stalled = new ReadableStream<Uint8Array>({
+          start(controller) {
+            init?.signal?.addEventListener("abort", () => controller.error(new Error("aborted")), {
+              once: true,
+            });
+          },
+        });
+        return new Response(stalled, { status: 200 });
+      },
+    });
+    expect(result.exitCode).toBe(4);
+    expect((result.body.error as { code: string }).code).toBe("client_timeout");
+  });
 });
 
 describe("main", () => {
@@ -271,6 +294,23 @@ describe("main", () => {
     });
     expect(invalidUtf8.status).toBe(2);
     expect(JSON.parse(invalidUtf8.stderr).error.message).toMatch(/UTF-8/);
+  });
+
+  test("runs when invoked through a symlinked checkout path", () => {
+    const linkDir = mkdtempSync(join(tmpdir(), "zudo-slack-notify-cli-"));
+    try {
+      const linkedApp = join(linkDir, "app");
+      symlinkSync(appDir, linkedApp, "dir");
+      const dry = spawnSync(
+        process.execPath,
+        [join(linkedApp, "cli/notify.ts"), "--file", "examples/simple.json", "--dry-run"],
+        { cwd: appDir, encoding: "utf8", env: cliEnv() },
+      );
+      expect(dry.status, dry.stderr).toBe(0);
+      expect(JSON.parse(dry.stdout).dryRun).toBe(true);
+    } finally {
+      rmSync(linkDir, { recursive: true, force: true });
+    }
   });
 
   test("help names the zudo-slack-notify sender variables", () => {

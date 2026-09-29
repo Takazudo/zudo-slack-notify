@@ -1,14 +1,13 @@
 #!/usr/bin/env node
-import { readFile } from "node:fs/promises";
-import { pathToFileURL } from "node:url";
-import { resolve } from "node:path";
+import { createReadStream, realpathSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import {
   buildSlackMessage,
   CHANNEL_ID_PATTERN,
+  RELAY_KEY_PATTERN,
   SLACK_TIMESTAMP_PATTERN,
   validateNotification,
 } from "../src/notification.ts";
-import type { Notification } from "../src/notification.ts";
 
 const MAX_BYTES = 16 * 1024;
 const HELP = `zudo-slack-notify — notify a configured Slack destination
@@ -109,20 +108,25 @@ const failure = (code: string, message: string, delivery = "unknown", exitCode =
   body: { ok: false, delivery, retryable: false, error: { code, message } },
 });
 
+/** Validate, render with a placeholder channel ID, and size-check exactly as the Worker will. */
+function prepare(input: unknown) {
+  const notification = validateNotification(input);
+  const slackPayload = buildSlackMessage(notification, "C0000000000");
+  const body = JSON.stringify(notification);
+  if (Buffer.byteLength(body) > MAX_BYTES) throw new Error("Notification exceeds 16 KiB.");
+  return { notification, slackPayload, body };
+}
+
 export async function sendNotification(
   input: unknown,
   options: { endpoint: string; apiKey: string; fetchImpl?: typeof fetch; timeoutMs?: number },
 ): Promise<Result> {
-  const notification = validateNotification(input);
+  const { notification, body } = prepare(input);
   const endpoint = validateEndpoint(options.endpoint);
-  if (!/^[\x21-\x7e]{32,256}$/.test(options.apiKey))
+  if (!RELAY_KEY_PATTERN.test(options.apiKey))
     throw new Error(
       "ZUDO_SLACK_NOTIFY_API_KEY must contain 32–256 printable ASCII characters without spaces.",
     );
-  // Validate the exact renderer locally as well, using a placeholder channel ID.
-  buildSlackMessage(notification, "C0000000000");
-  const body = JSON.stringify(notification);
-  if (Buffer.byteLength(body) > MAX_BYTES) throw new Error("Notification exceeds 16 KiB.");
   const fetchImpl = options.fetchImpl ?? fetch;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? 20_000);
@@ -141,7 +145,9 @@ export async function sendNotification(
     let data: any;
     try {
       data = JSON.parse(await readResponse(response));
-    } catch {
+    } catch (error) {
+      // A deadline hit while the body streams is a timeout, not a malformed reply.
+      if (controller.signal.aborted) throw error;
       return failure(
         "unrecognized_response",
         "The API response could not be verified. Check Slack before resending.",
@@ -272,18 +278,10 @@ async function readResponse(response: Response): Promise<string> {
 }
 
 async function readInput(file: string): Promise<string> {
-  if (file !== "-") {
-    const content = await readFile(file);
-    if (content.byteLength > MAX_BYTES) throw new Error("Input exceeds 16 KiB.");
-    try {
-      return new TextDecoder("utf-8", { fatal: true }).decode(content);
-    } catch {
-      throw new Error("The input file must contain valid UTF-8.");
-    }
-  }
+  const stdin = file === "-";
   const chunks: Buffer[] = [];
   let size = 0;
-  for await (const chunk of process.stdin) {
+  for await (const chunk of stdin ? process.stdin : createReadStream(file)) {
     const value = Buffer.from(chunk);
     size += value.byteLength;
     if (size > MAX_BYTES) throw new Error("Input exceeds 16 KiB.");
@@ -292,7 +290,11 @@ async function readInput(file: string): Promise<string> {
   try {
     return new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(chunks));
   } catch {
-    throw new Error("Standard input must contain valid UTF-8.");
+    throw new Error(
+      stdin
+        ? "Standard input must contain valid UTF-8."
+        : "The input file must contain valid UTF-8.",
+    );
   }
 }
 
@@ -312,17 +314,14 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
         throw new Error("The input file must contain valid JSON.");
       }
     }
-    const notification: Notification = validateNotification(input);
-    const slackPayload = buildSlackMessage(notification, "C0000000000");
-    if (Buffer.byteLength(JSON.stringify(notification)) > MAX_BYTES)
-      throw new Error("Notification exceeds 16 KiB.");
     if (parsed.dryRun) {
+      const { notification, slackPayload } = prepare(input);
       process.stdout.write(
         JSON.stringify({ dryRun: true, notification, slackPayload }, null, 2) + "\n",
       );
       return 0;
     }
-    const result = await sendNotification(notification, {
+    const result = await sendNotification(input, {
       endpoint: process.env.ZUDO_SLACK_NOTIFY_URL ?? "",
       apiKey: process.env.ZUDO_SLACK_NOTIFY_API_KEY ?? "",
     });
@@ -342,5 +341,15 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href)
-  process.exitCode = await main();
+function invokedDirectly(): boolean {
+  if (!process.argv[1]) return false;
+  // Node realpaths the entry module's URL but not argv[1]; without comparing real
+  // paths, a run through a symlinked checkout silently does nothing and exits 0.
+  try {
+    return realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+}
+
+if (invokedDirectly()) process.exitCode = await main();

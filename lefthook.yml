@@ -4,6 +4,9 @@ pre-commit:
   commands:
     format-md:
       glob: "*.{md,mdx}"
-      exclude: "^(_temp-resource|worktrees)/"
+      # lefthook 2 matches exclude entries as globs, not regexes.
+      exclude:
+        - "_temp-resource/**"
+        - "worktrees/**"
       run: pnpm exec mdx-formatter --write {staged_files}
       stage_fixed: true

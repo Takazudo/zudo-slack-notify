@@ -46,6 +46,48 @@ export class ValidationError extends Error {
 export const TARGET_ALIAS_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 export const CHANNEL_ID_PATTERN = /^[CGD][A-Z0-9]{8,63}$/;
 export const SLACK_TIMESTAMP_PATTERN = /^\d{10,16}\.\d{6}$/;
+export const RELAY_KEY_PATTERN = /^[\x21-\x7e]{32,256}$/;
+export const SLACK_BOT_TOKEN_PATTERN = /^xoxb-[A-Za-z0-9-]{5,495}$/;
+const MAX_TARGETS_JSON_LENGTH = 16 * 1024;
+const MAX_TARGETS = 100;
+const MAX_TARGET_ALIAS_LENGTH = 64;
+
+/**
+ * Parse the SLACK_TARGETS secret (JSON object: alias -> Slack channel ID). Shared by
+ * the Worker and the secret-push script so an upload cannot pass a looser check than
+ * the one the Worker fails closed on. A problem never repeats the secret value.
+ */
+export function parseSlackTargets(
+  raw: unknown,
+): { targets: Record<string, string> } | { problem: string } {
+  if (typeof raw !== "string" || raw.length > MAX_TARGETS_JSON_LENGTH) {
+    return { problem: "must be JSON text of at most 16 KiB" };
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return { problem: "must be valid JSON" };
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return { problem: "must be a JSON object of alias -> channel ID" };
+  }
+  const entries = Object.entries(parsed);
+  if (!entries.length) return { problem: "must contain at least one alias" };
+  if (entries.length > MAX_TARGETS)
+    return { problem: `must contain at most ${MAX_TARGETS} aliases` };
+  for (const [alias, channel] of entries) {
+    if (alias.length > MAX_TARGET_ALIAS_LENGTH || !TARGET_ALIAS_PATTERN.test(alias)) {
+      return {
+        problem: `every alias must be lowercase kebab-case of at most ${MAX_TARGET_ALIAS_LENGTH} characters`,
+      };
+    }
+    if (typeof channel !== "string" || !CHANNEL_ID_PATTERN.test(channel)) {
+      return { problem: `alias "${alias}" does not map to a valid Slack channel ID` };
+    }
+  }
+  return { targets: parsed as Record<string, string> };
+}
 
 const KINDS: Readonly<Record<NotificationKind, string>> = {
   info: "Info",
@@ -64,7 +106,7 @@ const NOTIFICATION_KEYS = new Set([
   "links",
   "threadTs",
 ]);
-const FORBIDDEN_CONTROLS = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/;
+const FORBIDDEN_CONTROLS = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/;
 
 function record(value: unknown, description: string): Record<string, unknown> {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {

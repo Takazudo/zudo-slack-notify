@@ -65,7 +65,7 @@ Right after a first deploy a custom domain can take a moment to answer, so the s
 pnpm b4push
 ```
 
-Runs `scripts/run-b4push.sh` in seven steps: frozen install, Prettier check, markdown format check, typecheck, `pnpm test`, the app workerd suite, and build. The heavy steps go through the machine-wide queue when it is present. It collects failures so one run reports every broken step.
+Runs `scripts/run-b4push.sh` in eight steps: frozen install, Prettier check, markdown format check, typecheck, `pnpm test`, the app workerd suite, build, and the doc link check. The heavy steps go through the machine-wide queue when it is present. It collects failures so one run reports every broken step.
 
 ## Formatting
 

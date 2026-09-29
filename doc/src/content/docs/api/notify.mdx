@@ -93,4 +93,4 @@ Replies are never broadcast to the channel. If the parent cannot take replies Sl
 
 ## Order of checks
 
-A request is refused at the first check it fails, in this order: route and method, Worker configuration (`503 server_misconfigured`), authentication, content type and encoding, body size and JSON, validation and rendering, target lookup, then the single Slack attempt. Because configuration comes first, an unwired Worker never authenticates anyone or contacts Slack. See the [error catalog](./errors/) for every code.
+A request is refused at the first check it fails, in this order: route and method, Worker configuration (`503 server_misconfigured`), authentication, content type and encoding, body size and JSON, field validation, target lookup, rendering, then the single Slack attempt. Because configuration comes first, an unwired Worker never authenticates anyone or contacts Slack. See the [error catalog](./errors/) for every code.

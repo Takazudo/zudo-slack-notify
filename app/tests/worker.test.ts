@@ -200,6 +200,7 @@ describe("request body", () => {
       { ...body, message: " \n " },
       { ...body, message: "a".repeat(2001) },
       { ...body, message: "contains\u0000control" },
+      { ...body, message: "contains\u0085C1 control" },
       { ...body, title: null },
       { ...body, kind: "constructor" },
       { ...body, blocks: [] },

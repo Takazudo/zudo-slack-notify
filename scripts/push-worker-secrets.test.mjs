@@ -135,6 +135,9 @@ describe("push-worker-secrets", () => {
     ["array targets", "SLACK_TARGETS", '["C0FAKE0001"]'],
     ["bad channel id", "SLACK_TARGETS", '{"alerts":"c0lowercase1"}'],
     ["non-string channel", "SLACK_TARGETS", '{"alerts":12345678901}'],
+    ["uppercase alias", "SLACK_TARGETS", '{"Alerts":"C0FAKE0001"}'],
+    ["underscore alias", "SLACK_TARGETS", '{"release_bot":"C0FAKE0001"}'],
+    ["token outside the Worker charset", "SLACK_BOT_TOKEN", "xoxb-fake.token/with-dots"],
   ];
   it.each(invalidCases)(
     "rejects %s with no upload and no values printed",
