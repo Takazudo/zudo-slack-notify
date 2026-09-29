@@ -8,7 +8,8 @@ zudo-doc site (`doc/`). Public repo.
 ```text
 app/                 Worker API + CLI (Worker: zudo-slack-notify-app)
 doc/                 zudo-doc site (Worker: zudo-slack-notify)
-scripts/             repo scripts (run-b4push.sh)
+skills/notify-slack/ Claude Code agent skill
+scripts/             run-b4push.sh, push-worker-secrets.mjs, smoke.sh (+ vitest tests)
 _temp-resource/      reference prototype, deleted before the root PR merges
 worktrees/           x-wt-teams worktrees (gitignored)
 pnpm-workspace.yaml  workspace members + pnpm settings (root-only)

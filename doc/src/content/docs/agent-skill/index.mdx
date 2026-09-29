@@ -41,11 +41,14 @@ A symlink stays current as the checkout updates; a copy needs refreshing. Then s
 
 The generic skill sends what it is told. A project-specific wrapper knows the procedure, which stage needs a human, and the review URL. `skills/notify-slack/references/project-wrapper.md` describes the pattern:
 
-1. The project skill completes its own checks.
+1. The project skill follows its real candidate workflow and completes its own checks.
 2. It records the real package, version, commit, and approval location.
 3. It calls `notify-slack` once for the right target.
 4. It records the returned receipt, or the delivery problem, in its own state.
-5. It continues or pauses according to the project's existing process.
+5. It continues or pauses according to the project's existing process. A failed notification does not change candidate state, and a successful one does not approve anything.
+6. Once the real workflow confirms publication, it may send a `success` follow-up in the original thread, if the original receipt exists.
+
+Every example value in `app/examples/` must be replaced with actual facts; do not copy "checks passed" as an assumption. This repository does not install or overwrite a personal skill.
 
 ## Approval boundary
 
@@ -53,9 +56,19 @@ The generic skill sends what it is told. A project-specific wrapper knows the pr
 A `sent` receipt means a message was posted. It is not approval to publish, merge, deploy, or take any irreversible step. Slack replies, reactions, and elapsed time are not observed by this service and cannot unblock an agent. `source` and `kind` are the agent's own claims, not verified facts.
 :::
 
+## Dry run
+
+Ask the skill for a preview, or use it while building a wrapper, and it appends `--dry-run`. That validates and prints the request and Slack payload with no credentials and no network, so `--env-file` may be omitted. A dry run is never reported as delivered.
+
+## Receipts
+
+After a `sent` result the skill records the receipt immediately in the task's private local record (an ignored file or the workflow's existing status store), and checks that record before sending again on resume. The server does not deduplicate, and a fresh `requestId` is not a deduplication key.
+
+The receipt contains the Slack channel ID, so it stays out of public text. In issues, pull requests, commit messages, and shared logs, `delivery` and `requestId` are fine; keep `channel` and `ts` private. To thread a follow-up, use the same target and the parent receipt's `ts` as `threadTs` (or `--thread-ts`); never invent a timestamp.
+
 ## Handling outcomes
 
 - Exit `0`: record the `ts` if replies will thread.
 - Exit `1` or `2`: the message was not sent; report the error and fix the input or setup.
-- Exit `3`: wait at least `Retry-After`, then resend deliberately.
-- Exit `4`: delivery is unknown. Tell the human and check Slack; do not resend blindly.
+- Exit `3`: no post was accepted. Wait the full `retryAfterSeconds` (or the textual `retryAfter`) before a deliberate retry, never shorten the wait, and retry in a bounded way only if the calling workflow authorizes it.
+- Exit `4`, or a transport failure without a valid receipt: delivery is uncertain. Do not retry automatically. Ask the user to check the destination, or use existing task evidence to see whether the message is present.
