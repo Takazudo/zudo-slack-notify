@@ -16,14 +16,13 @@ Send notifications with the local `zudo-slack-notify` checkout. Resolve `ZUDO_SL
 
 ## Send
 
-Use Node.js 24+. The sender env file holds `ZUDO_SLACK_NOTIFY_URL` and `ZUDO_SLACK_NOTIFY_API_KEY`. It defaults to `$DROPBOX_ROOT/env/zudo-slack-notify/credentials/sender.env`; use another path only when the project or user names one. Load it through `--env-file` so the key never appears in argv, logs, or payloads:
+Use Node.js 24+. The sender env file holds `ZUDO_SLACK_NOTIFY_URL` and `ZUDO_SLACK_NOTIFY_API_KEY`. Its path is in `$ZUDO_SLACK_NOTIFY_SENDER_ENV`; there is no default. Load it through `--env-file` so the key never appears in argv, logs, or payloads:
 
 ```sh
-SENDER_ENV="$DROPBOX_ROOT/env/zudo-slack-notify/credentials/sender.env"
-node --env-file="$SENDER_ENV" "$ZUDO_SLACK_NOTIFY_ROOT/app/cli/notify.ts" --file /absolute/path/notification.local.json
+node --env-file="$ZUDO_SLACK_NOTIFY_SENDER_ENV" "$ZUDO_SLACK_NOTIFY_ROOT/app/cli/notify.ts" --file /absolute/path/notification.local.json
 ```
 
-Never read, print, or copy the env file's contents. Do not obtain or pass `SLACK_BOT_TOKEN` or Cloudflare deployment credentials. If the env file or the two sender variables are unavailable, report the missing configuration; do not search unrelated secrets or silently post by another route.
+Never read, print, or copy the env file's contents. Do not obtain or pass `SLACK_BOT_TOKEN` or Cloudflare deployment credentials. If `ZUDO_SLACK_NOTIFY_SENDER_ENV` is unset, the file is missing, or the two sender variables are unavailable, report the missing configuration; do not search unrelated secrets or silently post by another route.
 
 For a requested preview, or while integrating a new wrapper, append `--dry-run`. It validates and prints the request and Slack payload without credentials or network, so `--env-file` may be omitted. Do not report a dry run as delivered.
 
