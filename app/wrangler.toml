@@ -1,0 +1,33 @@
+name = "zudo-slack-notify-app"
+main = "src/index.ts"
+# wrangler 4.143.0 bundles workerd 1.20260926.1. Keep this date supported by the
+# pinned local runtime; review both pins together when upgrading.
+compatibility_date = "2026-09-26"
+# Top-level scalars must stay above every [table], or TOML swallows them into it.
+workers_dev = false
+preview_urls = false
+
+# No nodejs_compat, storage bindings, queue, or framework is required.
+#
+# Runtime secrets (`wrangler secret put <NAME>`; never commit their values):
+#   NOTIFY_API_KEY   relay bearer key that local senders present
+#   SLACK_BOT_TOKEN  Slack bot token (xoxb-...) with chat:write
+#   SLACK_TARGETS    JSON map of target alias -> Slack channel ID
+# SLACK_TARGETS is a secret rather than a [vars] entry because this repo is
+# public and Slack channel IDs must stay out of git.
+#
+# There is deliberately no `[secrets] required = [...]` block yet. The first
+# deploy happens before the Slack bot token exists, so the Worker must deploy
+# without it and fail closed (503 server_misconfigured) until all three secrets
+# are set. Once Slack is wired and all three secrets exist on the deployed
+# Worker, add:
+#   [secrets]
+#   required = ["NOTIFY_API_KEY", "SLACK_BOT_TOKEN", "SLACK_TARGETS"]
+# so a later deploy cannot silently ship without them.
+
+[observability]
+enabled = true
+
+[[routes]]
+pattern = "zudo-slack-notify-app.zudolab.dev"
+custom_domain = true
