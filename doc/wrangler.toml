@@ -5,7 +5,7 @@
 
 name = "zudo-slack-notify"
 
-compatibility_date = "2026-09-27"
+compatibility_date = "2026-09-26"
 
 # Prevents serving on the *.workers.dev route.
 workers_dev = false
