@@ -11,8 +11,8 @@ export default defineConfig({
       wrangler: { configPath: "./wrangler.toml" },
       miniflare: {
         bindings: { NOTIFY_API_KEY: API_KEY, SLACK_BOT_TOKEN: BOT_TOKEN, SLACK_TARGETS },
-        // Below the isolate, so it also catches the Worker's module-captured native
-        // fetch; an isolate-level fetch mock (e.g. MSW) cannot promise that.
+        // Sits below the isolate with no network fallback, so even the Worker's
+        // module-captured native fetch cannot bypass it.
         outboundService: createOutboundMock(),
       },
     }),
