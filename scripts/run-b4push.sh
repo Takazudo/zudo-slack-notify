@@ -38,12 +38,13 @@ heavy() {
   if [ -n "$g" ] && [ -z "${CI:-}" ]; then "$g" -- "$@"; else "$@"; fi
 }
 
-run_step "Step 1/6: Install dependencies (frozen lockfile)" pnpm install --frozen-lockfile
-run_step "Step 2/6: Format check"                          pnpm format:check
-run_step "Step 3/6: Markdown format check"                 pnpm format:md:check
-run_step "Step 4/6: Typecheck"                             pnpm typecheck
-run_step "Step 5/6: Tests"                                 heavy pnpm test
-run_step "Step 6/6: Build"                                 heavy pnpm build
+run_step "Step 1/7: Install dependencies (frozen lockfile)" pnpm install --frozen-lockfile
+run_step "Step 2/7: Format check"                          pnpm format:check
+run_step "Step 3/7: Markdown format check"                 pnpm format:md:check
+run_step "Step 4/7: Typecheck"                             pnpm typecheck
+run_step "Step 5/7: Tests"                                 heavy pnpm test
+run_step "Step 6/7: App workerd tests"                       heavy pnpm --filter zudo-slack-notify-app test:workerd
+run_step "Step 7/7: Build"                                 heavy pnpm build
 
 END_TIME=$(date +%s)
 DURATION=$((END_TIME - START_TIME))
