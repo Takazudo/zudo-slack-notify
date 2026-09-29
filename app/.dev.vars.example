@@ -1,0 +1,10 @@
+# Copy to .dev.vars for `wrangler dev`, then replace every placeholder.
+# Never commit .dev.vars or any file holding real credentials or channel IDs.
+# The test suites supply their own fakes and never need these values.
+NOTIFY_API_KEY="REPLACE_WITH_64_HEX_CHAR_RANDOM_VALUE"
+SLACK_BOT_TOKEN="xoxb-REPLACE_WITH_YOUR_BOT_TOKEN"
+# JSON map of target alias -> Slack channel ID (C..., G..., or D...).
+SLACK_TARGETS='{"dev":"REPLACE_WITH_CHANNEL_ID","releases":"REPLACE_WITH_CHANNEL_ID"}'
+
+# Local senders need only NOTIFY_API_KEY and the Worker URL (see .env.example).
+# Never give them SLACK_BOT_TOKEN or a Cloudflare deploy token.
