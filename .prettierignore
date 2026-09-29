@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.wrangler/
+worktrees/
+_temp-resource/
+pnpm-lock.yaml
+**/*.md
+**/*.mdx

@@ -1,0 +1,9 @@
+# Installed by the `prepare` script (pnpm install runs it).
+pre-commit:
+  parallel: true
+  commands:
+    format-md:
+      glob: "*.{md,mdx}"
+      exclude: "^(_temp-resource|worktrees)/"
+      run: pnpm exec mdx-formatter --write {staged_files}
+      stage_fixed: true
