@@ -11,12 +11,12 @@ Start from the CLI exit code and `error.code`, then find the row here. The full 
 The Worker refuses to serve before authenticating or contacting Slack.
 
 - **Cause:** one of `NOTIFY_API_KEY`, `SLACK_BOT_TOKEN`, `SLACK_TARGETS` is missing or malformed. The key must be 32 to 256 printable ASCII characters; the token must match `xoxb-` plus alphanumerics and dashes; the targets must be a non-empty JSON object (at most 100 entries) of valid aliases to channel IDs, in at most 16 KiB.
-- **Fix:** run `pnpm ops:push-secrets --dry-run`, correct `worker.env`, then push. It is expected before Slack is wired.
-- **Not a bug** if `SLACK_WIRED` is not `true`; the smoke test accepts it.
+- **Fix:** set the missing or malformed secret with `pnpm exec wrangler secret put NAME` from `app/`, or validate your worker env file with `pnpm ops:push-secrets --dry-run --env-file <path>` and push it. It is expected before Slack is wired.
+- **Not a bug** in the bundled deploy workflow's smoke test if the `SLACK_WIRED` repository variable is not `true`; the test accepts it.
 
 ## 401 unauthorized
 
-The relay key does not match. Compare `ZUDO_SLACK_NOTIFY_API_KEY` in `sender.env` with `NOTIFY_API_KEY` in `worker.env`, and re-push if you rotated. Watch for trailing whitespace or quotes in the env file.
+The relay key does not match. Compare `ZUDO_SLACK_NOTIFY_API_KEY` in your sender env file with the `NOTIFY_API_KEY` Worker secret, and set the secret again if you rotated. Watch for trailing whitespace or quotes in the env file.
 
 ## slack_rejected with not_in_channel
 
@@ -28,7 +28,7 @@ The bot token in the Worker is stale. [Rotate the Slack token](./secrets/).
 
 ## 403 target_not_allowed
 
-The alias is not in `SLACK_TARGETS`. Check spelling; aliases are lowercase kebab-case. Update the secret and push.
+The alias is not in `SLACK_TARGETS`. Check spelling; aliases are lowercase kebab-case. Update the `SLACK_TARGETS` Worker secret.
 
 ## Delivery unknown (exit 4)
 
@@ -50,4 +50,8 @@ An input or configuration problem, printed on stderr as `local_input_error`: a m
 
 ## Smoke test fails on 503 after wiring
 
-`SLACK_WIRED` is `true` but the Worker answered `503`, so a secret is missing. Check the secret names with `pnpm exec wrangler secret list` in `app/` and re-run `pnpm ops:push-secrets`.
+Applies to the bundled deploy workflows. The `SLACK_WIRED` repository variable is `true` but the Worker answered `503`, so a Worker secret is missing. Check the names with `pnpm exec wrangler secret list` in `app/`, then set the missing one with `pnpm exec wrangler secret put NAME` or re-run `pnpm ops:push-secrets`.
+
+## Smoke test fails with "APP_BASE_URL is required"
+
+`scripts/smoke.sh` has no default origin. Set the `APP_BASE_URL` repository variable (or `DOC_BASE_URL` for the doc job) to the bare origin, for example `https://notify.example.com`, with no path.
