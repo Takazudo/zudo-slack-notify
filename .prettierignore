@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.wrangler/
+worktrees/
+_temp-resource/
+pnpm-lock.yaml
+**/*.md
+**/*.mdx
+# zfb / zudo-doc generated output
+.zfb/
+.zfb-build/
+.zudo-doc/
+# scaffold-generated sources kept verbatim so upstream regeneration diffs stay clean
+doc/pages/docs/
+doc/scripts/check-links.js

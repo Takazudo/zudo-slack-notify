@@ -1,0 +1,95 @@
+---
+title: CLI Sender
+description: Flags, environment, exit codes, dry runs, and keeping the key off the command line.
+sidebar_position: 4
+---
+
+The sender is `app/cli/notify.ts`. It needs Node.js 24 or later, which runs the TypeScript file directly. Run it from `app/` in the checkout, or use the script's absolute path. It sends nothing to Slack itself: it validates locally and calls the Worker.
+
+## Environment
+
+| Variable                    | Meaning                                                                |
+| --------------------------- | ---------------------------------------------------------------------- |
+| `ZUDO_SLACK_NOTIFY_URL`     | Full endpoint, ending in `/v1/notify`                                  |
+| `ZUDO_SLACK_NOTIFY_API_KEY` | The relay key (32 to 256 printable ASCII characters), never the Slack token |
+
+The URL must be HTTPS, with no credentials, query, or fragment. Plain HTTP is accepted only for `localhost`, `127.0.0.1`, and `[::1]`, for local development.
+
+## Keep the key off argv
+
+Put the two variables in the sender env file and load it with `node --env-file`. The key then never appears on the command line, in shell history, or in the process list:
+
+```sh
+node --env-file="$DROPBOX_ROOT/env/zudo-slack-notify/credentials/sender.env" \
+  "$ZUDO_SLACK_NOTIFY_ROOT/app/cli/notify.ts" --file notification.json
+```
+
+The CLI has no `--api-key` flag on purpose.
+
+## Usage
+
+<Tabs>
+  <TabItem label="Message flags" value="flags" default>
+    ```sh
+    node --env-file=.env cli/notify.ts \
+      --target dev --message "Build finished." --kind success
+    ```
+  </TabItem>
+  <TabItem label="JSON file" value="file">
+    ```sh
+    node --env-file=.env cli/notify.ts --file examples/npm-approval.json
+    ```
+  </TabItem>
+  <TabItem label="Standard input" value="stdin">
+    ```sh
+    node --env-file=.env cli/notify.ts --file - < notification.json
+    ```
+  </TabItem>
+  <TabItem label="Dry run" value="dry">
+    ```sh
+    node cli/notify.ts --file examples/npm-approval.json --dry-run
+    ```
+  </TabItem>
+</Tabs>
+
+## Flags
+
+| Flag                | Meaning                                                                       |
+| ------------------- | ----------------------------------------------------------------------------- |
+| `--file PATH` or `-` | Complete JSON payload from a file or standard input. Cannot be mixed with the message flags below. |
+| `--target ALIAS`    | Destination alias                                                             |
+| `--message TEXT`    | Notification body                                                             |
+| `--title TEXT`      | Optional heading                                                              |
+| `--kind KIND`       | `info`, `success`, `warning`, `error`, `action_required`                      |
+| `--source TEXT`     | Project or agent label                                                        |
+| `--thread-ts TS`    | Parent receipt's `ts`; use with the same target                               |
+| `--dry-run`         | Validate and print the request and Slack payload; no network                  |
+| `--help`            | Print usage                                                                   |
+
+Each flag may appear once, unknown flags are errors, and a flag value may not start with `--`. `fields` and `links` are available only through `--file`. Input files and stdin are limited to 16 KiB of UTF-8.
+
+## Dry run
+
+`--dry-run` runs the same validation and rendering as the Worker, using the placeholder channel `C0000000000`, and prints `dryRun`, `notification`, and `slackPayload` as JSON. It needs no environment and makes no request. It exits `0` when the input is valid.
+
+## Exit codes
+
+| Code | Meaning                                                              | `delivery`  |
+| ---- | -------------------------------------------------------------------- | ----------- |
+| `0`  | Sent (verified receipt), or a successful dry run or `--help`         | `sent`      |
+| `1`  | Rejected by the API and not sent (auth, validation, target, Slack rejection) | `not_sent` |
+| `2`  | Local input or configuration error, before any request               | `not_sent`  |
+| `3`  | Slack rate limited; wait for `Retry-After`                           | `not_sent`  |
+| `4`  | Delivery unknown: check Slack before resending                       | `unknown`   |
+
+The result JSON is printed on stdout, except code `2`, whose error goes to stderr with `error.code` set to `local_input_error`.
+
+Exit `4` also covers failures the CLI detects itself, with these `error.code` values: `client_timeout` (no answer within 20 seconds), `client_network_error`, and `unrecognized_response` (the reply could not be verified as an API response). When the API answers with an unrecognizable error code the CLI reports `api_error`.
+
+## Output
+
+On failure the CLI prints `ok`, `delivery`, `requestId`, `retryable`, and `error` (with the message truncated and the relay key redacted). On exit `3` it adds `retryAfter` and `retryAfterSeconds`. It never prints an upstream HTML page or arbitrary response body.
+
+:::note[No automatic retries]
+The CLI makes one request with redirects disabled. It never retries, on any exit code. A caller that wants to resend must do so deliberately after reading the exit code. See [Delivery semantics](../api/delivery-semantics/).
+:::

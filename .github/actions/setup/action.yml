@@ -1,0 +1,26 @@
+# Shared pnpm + Node.js + install boilerplate used by every job.
+# pnpm version comes from the `packageManager` field in the root package.json;
+# Node version comes from the root `.node-version`.
+#
+# Does NOT check out the repo: a local action can only be resolved once the
+# workspace already has the repo checked out, so `actions/checkout` must stay
+# an explicit step before this one in every caller.
+name: Setup
+description: pnpm, Node.js, and pnpm install.
+
+runs:
+  using: composite
+  steps:
+    - name: Setup pnpm
+      uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      with:
+        dest: ~/setup-pnpm-${{ github.job }}
+
+    - name: Setup Node.js
+      uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      with:
+        node-version-file: .node-version
+
+    - name: Install dependencies
+      shell: bash
+      run: pnpm install --frozen-lockfile

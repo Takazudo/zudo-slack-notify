@@ -1,0 +1,8 @@
+{
+  "target": "dev",
+  "kind": "warning",
+  "title": "Your input is needed",
+  "message": "The implementation is ready, but the final channel configuration is missing. Please return to the agent session and choose the release channel.",
+  "source": "example-project / local agent",
+  "fields": [{ "label": "Waiting for", "value": "Channel configuration" }]
+}

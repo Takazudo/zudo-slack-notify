@@ -1,0 +1,41 @@
+---
+title: Delivery semantics
+description: What sent, not_sent, and unknown mean, and why nothing retries automatically.
+sidebar_position: 3
+---
+
+Every response says what the Worker knows about the message in the `delivery` field.
+
+| `delivery` | Meaning                                                             | What you may do                                                      |
+| ---------- | ------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `sent`     | Slack acknowledged the post and the receipt was verified.           | Keep `ts` if you want to thread replies.                             |
+| `not_sent` | Nothing was posted: refused locally, or Slack explicitly rejected it. | Fix the cause and resend. For `429`, wait for `Retry-After` first. |
+| `unknown`  | The request may or may not have posted.                             | **Check the Slack channel before resending.**                        |
+
+:::warning[unknown is not failure]
+A timeout or network error can occur after Slack accepted the message. Resending on `unknown` without looking can post a duplicate. The CLI exits `4` for this state so an agent can stop and report instead of looping.
+:::
+
+## Why nothing retries automatically
+
+- One valid request causes exactly one Slack attempt.
+- The only way to be safe against duplicates would be an idempotency key that Slack's `chat.postMessage` does not offer, so a retry cannot be made safe.
+- `requestId` identifies one API attempt for log correlation. It is not an idempotency key and is not sent to Slack.
+- The Worker does not queue, sleep, or use `waitUntil` for the send. It waits for Slack, so the response reflects what actually happened.
+
+## Delivery by outcome
+
+| Outcome                                      | `delivery`  |
+| -------------------------------------------- | ----------- |
+| Valid Slack receipt                          | `sent`      |
+| Local validation, auth, config, size errors  | `not_sent`  |
+| `slack_rate_limited`                         | `not_sent`  |
+| `slack_rejected`                             | `not_sent`  |
+| `slack_delivery_unknown`                     | `unknown`   |
+| `slack_invalid_response`                     | `unknown`   |
+| `slack_network_error`                        | `unknown`   |
+| `slack_timeout`                              | `unknown`   |
+
+## Verifying the receipt
+
+Slack returning `200` is not enough. The Worker reports `sent` only when the body has `ok: true`, `channel` equals the channel it posted to, and `ts` looks like a Slack timestamp. The CLI applies the same rule again on its side before exiting `0`.

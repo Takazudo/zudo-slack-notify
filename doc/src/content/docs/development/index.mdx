@@ -1,0 +1,96 @@
+---
+title: Development
+description: Repository layout, test tiers, CI and deploy workflows, and the pre-push suite.
+sidebar_position: 8
+---
+
+## Layout
+
+```text
+app/                 Worker API + CLI (Worker: zudo-slack-notify-app)
+  src/               index.ts (handler), notification.ts (validation and rendering)
+  cli/notify.ts      CLI sender
+  tests/             unit, CLI, and workerd tests
+  examples/          sample payloads
+  slack-app-manifest.json
+  wrangler.toml
+doc/                 zudo-doc site (Worker: zudo-slack-notify)
+skills/notify-slack/ Claude Code skill
+scripts/             push-worker-secrets.mjs, smoke.sh, run-b4push.sh
+```
+
+The repository is a pnpm workspace (pnpm 11, Node 24) with two members, `app` and `doc`.
+
+## Local Worker
+
+Copy `app/.dev.vars.example` to `app/.dev.vars`, replace the placeholders, and run:
+
+```sh
+pnpm --filter zudo-slack-notify-app dev
+```
+
+Point a sender at it with `ZUDO_SLACK_NOTIFY_URL=http://127.0.0.1:8787/v1/notify`. Never commit `.dev.vars`.
+
+## Test tiers
+
+| Tier              | Command                                            | What it covers                                                                                                                                  |
+| ----------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Ops scripts       | `pnpm test:ops`                                    | Vitest for the root `scripts/`: `push-worker-secrets.mjs` and `smoke.sh`, with fakes. No real network or wrangler.                              |
+| App unit and CLI  | `pnpm --filter zudo-slack-notify-app test`         | Validation, rendering, handler and CLI behavior against an injected fake Slack.                                                                 |
+| workerd           | `pnpm --filter zudo-slack-notify-app test:workerd` | The Worker in the real Workers runtime, including native fetch handling. **Not** part of root `pnpm test`; run it on its own.                   |
+| Post-deploy smoke | `bash scripts/smoke.sh app` or `doc`               | The deployed origins, run by the deploy workflows after each deploy.                                                                            |
+
+Root `pnpm test` is `pnpm test:ops` followed by every member's `test` script, so it covers the first two rows. The suites supply their own fakes and never need real credentials or channel IDs.
+
+## Smoke tests
+
+`scripts/smoke.sh` takes one mode, `app` or `doc`, and needs `curl` and `jq`.
+
+- `app`: `GET /healthz` must return the Worker's `{ ok: true, service: "zudo-slack-notify" }`. An unauthenticated `POST /v1/notify` must return `401`; before Slack is wired a `503 server_misconfigured` is also tolerated. Any `2xx` fails. See [The SLACK_WIRED smoke variable](../operations/secrets/#the-slack_wired-smoke-variable).
+- `doc`: `GET /` must return `200` with the `zudo-slack-notify` site marker, and an unknown path must return `404`.
+
+Right after a first deploy a custom domain can take a moment to answer, so the script retries until the first real answer (the Worker's own JSON envelope for `app`, a `200` for `doc`), then tolerates nothing. Optional environment overrides:
+
+| Variable                       | Default                                     | Meaning                                                         |
+| ------------------------------ | ------------------------------------------- | --------------------------------------------------------------- |
+| `APP_BASE_URL`                 | `https://zudo-slack-notify-app.zudolab.dev` | API origin, for local runs and tests                            |
+| `DOC_BASE_URL`                 | `https://zudo-slack-notify.zudolab.dev`     | Docs origin                                                     |
+| `SLACK_WIRED`                  | empty                                       | `true` once Slack is wired: only `401` passes on `POST /v1/notify` |
+| `SMOKE_RETRY_WINDOW_SECONDS`   | `120`                                       | How long to wait for the first real answer                      |
+| `SMOKE_RETRY_INTERVAL_SECONDS` | `5`                                         | Pause between attempts                                          |
+
+## Pre-push suite
+
+```sh
+pnpm b4push
+```
+
+Runs `scripts/run-b4push.sh` in eight steps: frozen install, Prettier check, markdown format check, typecheck, `pnpm test`, the app workerd suite, build, and the doc link check. The heavy steps go through the machine-wide queue when it is present. It collects failures so one run reports every broken step.
+
+## Formatting
+
+- `pnpm format` and `pnpm format:check` run Prettier.
+- `pnpm format:md` and `pnpm format:md:check` run `@takazudo/mdx-formatter` over every `.md` and `.mdx` file, including these pages.
+
+## CI and deploy workflows
+
+All workflows share the composite action `.github/actions/setup` (pnpm from the `packageManager` field, Node from `.node-version`, and `pnpm install --frozen-lockfile`).
+
+| Workflow          | Trigger                                                                                          | Jobs                                                                                                                                  |
+| ----------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `ci.yml`          | pull requests, and pushes to any branch except `main`                                            | `format` (Prettier and markdown), `typecheck`, `test-app` (unit then workerd), `test-ops`, `build-app`, `build-doc` (build and check links) |
+| `actionlint.yml`  | pull requests and pushes that touch `.github/workflows/**` or `.github/actions/**`               | `actionlint` (pinned, checksum-verified release)                                                                                      |
+| `deploy-app.yml`  | push to `main` touching `app/**`, root package or workspace files, or the setup action; manual dispatch | `gate`, `test` (typecheck, unit, workerd), `deploy` (`wrangler deploy` in `app/`), `smoke` (`scripts/smoke.sh app` with `SLACK_WIRED` from the repo variable) |
+| `deploy-doc.yml`  | push to `main` touching `doc/**`, root package or workspace files, or the setup action; manual dispatch | `gate`, `deploy` (doc build, `check:links`, `wrangler deploy` in `doc/`), `smoke` (`scripts/smoke.sh doc`)                            |
+
+Each deploy workflow starts with a `gate` job that skips the rest, cleanly and green, when the ref is not `main` or when the `CLOUDFLARE_API_TOKEN` or `CLOUDFLARE_ACCOUNT_ID` repository secret is absent, so forks and unconfigured clones stay green. Cloudflare credentials are scoped to the single deploy step. Deploy runs never overlap (a concurrency group per workflow, without cancellation).
+
+## Editing these docs
+
+```sh
+pnpm --filter zudo-slack-notify-doc dev     # dev server
+pnpm --filter zudo-slack-notify-doc build   # static export
+pnpm --filter zudo-slack-notify-doc check:links
+```
+
+`check:links` fails on any broken internal link. Sidebar order comes from `sidebar_position` in each page's frontmatter, and each top-level folder's `index.mdx` names its category.

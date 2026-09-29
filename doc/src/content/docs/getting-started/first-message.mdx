@@ -1,0 +1,57 @@
+---
+title: Send the first message
+description: Verify the deployment with a dry run and a real message, then mark it wired.
+sidebar_position: 3
+---
+
+## Check the Worker is up
+
+```sh
+curl https://zudo-slack-notify-app.zudolab.dev/healthz
+# {"ok":true,"service":"zudo-slack-notify"}
+```
+
+## Dry run
+
+A dry run validates and renders the message locally and prints the request plus the Slack payload. No network is used.
+
+```sh
+cd app
+node cli/notify.ts --file examples/simple.json --dry-run
+```
+
+## Send it
+
+Load the sender env file with `node --env-file` so the key never appears on the command line:
+
+```sh
+node --env-file="$DROPBOX_ROOT/env/zudo-slack-notify/credentials/sender.env" \
+  cli/notify.ts --target dev --message "Hello from zudo-slack-notify." --kind success
+```
+
+Success exits `0` and prints a receipt:
+
+```json
+{
+  "ok": true,
+  "delivery": "sent",
+  "requestId": "…",
+  "target": "dev",
+  "channel": "C0123456789",
+  "ts": "1750000000.000001"
+}
+```
+
+If it fails, the exit code and `error.code` tell you why. See the [error catalog](../../api/errors/) and [Troubleshooting](../../operations/troubleshooting/).
+
+## Mark the deployment as wired
+
+The post-deploy smoke test (`scripts/smoke.sh app`) sends an unauthenticated `POST /v1/notify`. Before Slack is wired the expected answer is `503 server_misconfigured`; once wired it must be `401`. The GitHub repository variable `SLACK_WIRED` tells the smoke test which to accept: while it is not `true`, a `503 server_misconfigured` passes, and once it is `true` only `401` passes.
+
+After the first message is delivered, set the variable:
+
+```sh
+gh variable set SLACK_WIRED --body true
+```
+
+From then on a `503` in the smoke test fails the run. This is also the moment to consider adding `[secrets] required` to `app/wrangler.toml`; see [Secrets and rotation](../../operations/secrets/). The smoke script itself is described under [Smoke tests](../../development/#smoke-tests).
