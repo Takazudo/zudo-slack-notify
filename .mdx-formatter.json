@@ -1,0 +1,10 @@
+{
+  "exclude": [
+    "node_modules/**",
+    "**/node_modules/**",
+    "dist/**",
+    "**/dist/**",
+    "worktrees/**",
+    "_temp-resource/**"
+  ]
+}
