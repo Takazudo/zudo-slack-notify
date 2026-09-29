@@ -1,48 +1,93 @@
 ---
 title: Overview
-description: What zudo-slack-notify is, how the pieces fit together, and what it deliberately does not do.
+description: What zudo-slack-notify does, how a notification travels from your script to Slack, and what it deliberately does not do.
 sidebar_position: 1
 ---
 
-zudo-slack-notify is a small personal notification relay. A local agent or script wants to tell a human "the build finished" or "this needs your approval", and the message should land in a chosen Slack channel without the caller ever holding a Slack token.
+zudo-slack-notify is a small, self-hosted Slack notification relay. It lets an AI agent, a build script, or any local tool tell a human something in Slack, such as "the build finished" or "this needs your review", **without that caller ever holding a Slack token**.
 
-It is three parts:
+You deploy the relay as your own Cloudflare Worker. The Worker keeps the Slack bot token to itself. Your scripts get a narrower **relay key** that can do exactly one thing: post a plain, validated notification to one of the destinations you configured.
 
-- **A Cloudflare Worker API** (`POST /v1/notify`) that authenticates the caller, validates a small JSON message, and posts it to Slack with `chat.postMessage`.
-- **A Node CLI** (`app/cli/notify.ts`) that validates locally, sends the request, and maps the outcome to an exit code.
-- **A Claude Code agent skill** (`notify-slack`) that lets an agent send a notification with the facts of the moment.
+The project ships three parts:
 
-## Architecture
+- **A Cloudflare Worker API** (`POST /v1/notify`) that authenticates the caller, validates a small JSON message, renders it as Slack blocks, and posts it with `chat.postMessage`.
+- **A Node CLI** that validates locally, sends the request, and turns the outcome into an exit code. See [CLI](../cli/).
+- **A Claude Code agent skill** (`notify-slack`) that lets an agent send a notification with the facts of the moment. See [Agent skill](../agent-skill/).
+
+## How a notification travels
 
 ```mermaid
 flowchart LR
-  agent["Agent / script"] -->|notify-slack skill| cli["Node CLI"]
-  cli -->|"HTTPS POST /v1/notify<br/>Bearer relay key"| api["Worker API<br/>zudo-slack-notify-app"]
-  api -->|"chat.postMessage<br/>bot token"| slack["Slack"]
-  docs["Docs site<br/>zudo-slack-notify"] -.- api
+  caller["Agent / script / CI job"] -->|"HTTPS POST /v1/notify<br/>relay key + target alias"| worker["Your Worker<br/>(e.g. notify.example.com)"]
+  worker -->|"chat.postMessage<br/>bot token"| slack["Slack channel"]
 ```
 
-The Worker holds the only Slack credential. Callers hold a narrower relay key that cannot call arbitrary Slack methods. Channels are never named by callers: they pick a **target alias** such as `dev` or `releases`, and the Worker resolves it from its own configuration.
+1. The caller sends `POST /v1/notify` to your Worker with the relay key and a small JSON body naming a **target alias**, not a channel.
+2. The Worker checks the key, validates the body, looks up the alias in its own configuration, and renders the message.
+3. The Worker posts to Slack with the bot token, verifies Slack's receipt, and tells the caller what happened.
 
-## Domains
+Any HTTP client works. The CLI and the agent skill are conveniences on top of the same endpoint, so you can call the relay from a shell script, a CI job, or your favorite language.
 
-| Unit | Worker name             | Domain                                      |
-| ---- | ----------------------- | ------------------------------------------- |
-| API  | `zudo-slack-notify-app` | `https://zudo-slack-notify-app.zudolab.dev` |
-| Docs | `zudo-slack-notify`     | `https://zudo-slack-notify.zudolab.dev`     |
+## Core concepts
 
-The sender endpoint is `https://zudo-slack-notify-app.zudolab.dev/v1/notify`. There is no `workers.dev` hostname and no preview URL.
+### Relay key and bot token
 
-## Where the pieces live
+Two secrets, held by different parties:
 
-| Piece         | Path                                              |
-| ------------- | ------------------------------------------------- |
-| Worker source | `app/src/index.ts`, `app/src/notification.ts`     |
-| CLI           | `app/cli/notify.ts`                               |
-| Slack app     | `app/slack-app-manifest.json`                     |
-| Examples      | `app/examples/*.json`                             |
-| Agent skill   | `skills/notify-slack/`                            |
-| Operator tools | `scripts/push-worker-secrets.mjs`, `scripts/smoke.sh` |
+| Secret       | Held by              | Can do                                              |
+| ------------ | -------------------- | --------------------------------------------------- |
+| Bot token    | The Worker only      | Post to Slack channels the bot has been invited to  |
+| Relay key    | Your scripts, agents | Call `POST /v1/notify` on your Worker, nothing else |
+
+A leaked relay key lets someone send notifications to your configured targets. It cannot read Slack, call other Slack methods, or pick an arbitrary channel. You rotate it without touching Slack. See [Design decisions](../design/) for the reasoning.
+
+### Target aliases
+
+Callers never name a Slack channel. They pick an alias such as `dev` or `releases`, and the Worker resolves it through its `SLACK_TARGETS` secret, a JSON map of alias to channel ID. An unknown alias is refused before Slack is contacted.
+
+### Message kinds
+
+Every notification has a `kind`, which becomes the heading: `info` (the default), `success`, `warning`, `error`, or `action_required`. A `title`, a `source` label, up to six `fields`, and up to three HTTPS `links` are optional. Text is rendered literally, so a message cannot trigger mentions or `@channel`.
+
+### A minimal request
+
+```http
+POST /v1/notify HTTP/1.1
+Host: notify.example.com
+Authorization: Bearer <your-relay-key>
+Content-Type: application/json
+
+{ "target": "dev", "kind": "success", "message": "Build finished." }
+```
+
+A delivered message answers `200`:
+
+```json
+{
+  "ok": true,
+  "delivery": "sent",
+  "requestId": "0d6c1c53-6d6c-4f7f-9a3e-7f9d5a5b7d11",
+  "target": "dev",
+  "channel": "C0123456789",
+  "ts": "1750000000.000001"
+}
+```
+
+The full schema, limits, and rendering rules are in [POST /v1/notify](../api/notify/).
+
+### Delivery states
+
+Every response, success or failure, carries a `delivery` field that says what the Worker knows about Slack:
+
+- **`sent`**: Slack accepted the message and the Worker verified the receipt.
+- **`not_sent`**: the message definitely did not post, for example a bad key, an invalid body, or an explicit Slack rejection.
+- **`unknown`**: the Worker cannot tell, for example because Slack timed out after it may have accepted the post. Check the channel before sending again.
+
+Failures also carry `error.code` and `retryable`. See [Delivery semantics](../api/delivery-semantics/) and the [error catalog](../api/errors/).
+
+### Threading
+
+The success response returns `ts`, the Slack timestamp of the posted message. Send a later notification to the **same target** with `threadTs` set to that value, and it lands as a reply in the thread. The Worker does not remember receipts; the caller keeps the `ts`.
 
 ## What it deliberately does not do
 
@@ -57,4 +102,4 @@ The service delivers one message to one named destination, once, and reports wha
 - **No raw Block Kit and no mentions.** Caller text is rendered literally, so task text cannot turn into an accidental `@channel`.
 - **One shared relay key and one workspace.** Every holder of the key can use every configured target.
 
-Continue with [Getting started](../getting-started/) to stand it up, or read the [Design decisions](../design/) for the reasoning.
+Continue with [Getting started](../getting-started/) to run your own relay, read the [Design decisions](../design/) for the reasoning, or see [Development](../development/) for how the repository is laid out.

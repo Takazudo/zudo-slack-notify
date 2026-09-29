@@ -36,6 +36,10 @@ pnpm workspace (pnpm 11, Node 24). Scripts fan out with `pnpm -r --if-present`.
 
 The domain is `zudolab.dev` (not `zudlab.dev`). Deploys run from GitHub Actions (`deploy-app.yml`, `deploy-doc.yml`, main only, skipped cleanly when the Cloudflare credentials are absent) to custom domains.
 
+Repo variables (GitHub Actions): `APP_BASE_URL` and `DOC_BASE_URL` are the bare origins the smoke jobs require (no built-in defaults); `SLACK_WIRED` is optional, `true` once Slack delivery works.
+
+Maintainer note: env files live in a private store outside the repo. `ZUDO_SLACK_NOTIFY_WORKER_ENV` (for `pnpm ops:push-secrets`) and `ZUDO_SLACK_NOTIFY_SENDER_ENV` (for the skill) point at them.
+
 ## Secrets policy
 
 This repo is public. No tokens, relay keys, Slack channel IDs, Cloudflare account IDs, or emails in

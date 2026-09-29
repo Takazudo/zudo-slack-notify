@@ -26,25 +26,19 @@ cd app
 node cli/notify.ts --file examples/simple.json --dry-run
 ```
 
-To send for real, create the Slack app from `app/slack-app-manifest.json`, put the values in the
-operator store at `$DROPBOX_ROOT/env/zudo-slack-notify/credentials/`, then:
+Deploy your own: see [Getting Started](https://zudo-slack-notify.zudolab.dev) in the docs. It covers
+the Slack app, Worker secrets, deployment, the sender env file, and the agent skill.
 
-```sh
-pnpm ops:push-secrets                      # upload Worker secrets
-node --env-file="$DROPBOX_ROOT/env/zudo-slack-notify/credentials/sender.env" \
-  cli/notify.ts --target dev --message "Hello." --kind success
+## Layout
+
+```text
+app/                 Worker API + CLI
+doc/                 documentation site
+skills/notify-slack/ Claude Code agent skill
+scripts/             ops helpers (secret upload, smoke checks)
 ```
 
-The full walk-through, API reference, and operations guide are in the docs.
-
-## Layout and deployments
-
-| Unit | Directory | Worker name             | Domain                                      |
-| ---- | --------- | ----------------------- | ------------------------------------------- |
-| API  | `app/`    | `zudo-slack-notify-app` | https://zudo-slack-notify-app.zudolab.dev   |
-| Docs | `doc/`    | `zudo-slack-notify`     | https://zudo-slack-notify.zudolab.dev       |
-
-`skills/notify-slack/` holds the agent skill. `pnpm b4push` runs the pre-push suite.
+`pnpm b4push` runs the pre-push suite.
 
 ## License
 

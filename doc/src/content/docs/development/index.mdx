@@ -46,18 +46,22 @@ Root `pnpm test` is `pnpm test:ops` followed by every member's `test` script, so
 
 `scripts/smoke.sh` takes one mode, `app` or `doc`, and needs `curl` and `jq`.
 
-- `app`: `GET /healthz` must return the Worker's `{ ok: true, service: "zudo-slack-notify" }`. An unauthenticated `POST /v1/notify` must return `401`; before Slack is wired a `503 server_misconfigured` is also tolerated. Any `2xx` fails. See [The SLACK_WIRED smoke variable](../operations/secrets/#the-slack_wired-smoke-variable).
+- `app`: `GET /healthz` must return the Worker's `{ ok: true, service: "zudo-slack-notify" }`. An unauthenticated `POST /v1/notify` must return `401`; before Slack is wired a `503 server_misconfigured` is also tolerated. Any `2xx` fails. See [Smoke test variables](../operations/secrets/#smoke-test-variables-for-the-bundled-deploy-workflows).
 - `doc`: `GET /` must return `200` with the `zudo-slack-notify` site marker, and an unknown path must return `404`.
 
-Right after a first deploy a custom domain can take a moment to answer, so the script retries until the first real answer (the Worker's own JSON envelope for `app`, a `200` for `doc`), then tolerates nothing. Optional environment overrides:
+Right after a first deploy a custom domain can take a moment to answer, so the script retries until the first real answer (the Worker's own JSON envelope for `app`, a `200` for `doc`), then tolerates nothing. Environment variables:
 
-| Variable                       | Default                                     | Meaning                                                         |
-| ------------------------------ | ------------------------------------------- | --------------------------------------------------------------- |
-| `APP_BASE_URL`                 | `https://zudo-slack-notify-app.zudolab.dev` | API origin, for local runs and tests                            |
-| `DOC_BASE_URL`                 | `https://zudo-slack-notify.zudolab.dev`     | Docs origin                                                     |
-| `SLACK_WIRED`                  | empty                                       | `true` once Slack is wired: only `401` passes on `POST /v1/notify` |
-| `SMOKE_RETRY_WINDOW_SECONDS`   | `120`                                       | How long to wait for the first real answer                      |
-| `SMOKE_RETRY_INTERVAL_SECONDS` | `5`                                         | Pause between attempts                                          |
+| Variable                       | Default | Meaning                                                                                 |
+| ------------------------------ | ------- | --------------------------------------------------------------------------------------- |
+| `APP_BASE_URL`                 | none    | Required for `app`: bare API origin, for example `https://notify.example.com`           |
+| `DOC_BASE_URL`                 | none    | Required for `doc`: bare docs origin                                                    |
+| `SLACK_WIRED`                  | empty   | `true` once Slack is wired: only `401` passes on `POST /v1/notify`                      |
+| `SMOKE_RETRY_WINDOW_SECONDS`   | `120`   | How long to wait for the first real answer                                              |
+| `SMOKE_RETRY_INTERVAL_SECONDS` | `5`     | Pause between attempts                                                                  |
+
+There are no built-in origin defaults: a missing or empty origin for the mode being run exits non-zero with a clear message. In CI the deploy workflows pass `APP_BASE_URL` and `DOC_BASE_URL` from repository variables of the same names.
+
+The ops script `scripts/push-worker-secrets.mjs` reads its env file from `--env-file <path>` or the `ZUDO_SLACK_NOTIFY_WORKER_ENV` environment variable; see [Secrets and rotation](../operations/secrets/).
 
 ## Pre-push suite
 
@@ -80,8 +84,8 @@ All workflows share the composite action `.github/actions/setup` (pnpm from the 
 | ----------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
 | `ci.yml`          | pull requests, and pushes to any branch except `main`                                            | `format` (Prettier and markdown), `typecheck`, `test-app` (unit then workerd), `test-ops`, `build-app`, `build-doc` (build and check links) |
 | `actionlint.yml`  | pull requests and pushes that touch `.github/workflows/**` or `.github/actions/**`               | `actionlint` (pinned, checksum-verified release)                                                                                      |
-| `deploy-app.yml`  | push to `main` touching `app/**`, root package or workspace files, or the setup action; manual dispatch | `gate`, `test` (typecheck, unit, workerd), `deploy` (`wrangler deploy` in `app/`), `smoke` (`scripts/smoke.sh app` with `SLACK_WIRED` from the repo variable) |
-| `deploy-doc.yml`  | push to `main` touching `doc/**`, root package or workspace files, or the setup action; manual dispatch | `gate`, `deploy` (doc build, `check:links`, `wrangler deploy` in `doc/`), `smoke` (`scripts/smoke.sh doc`)                            |
+| `deploy-app.yml`  | push to `main` touching `app/**`, root package or workspace files, or the setup action; manual dispatch | `gate`, `test` (typecheck, unit, workerd), `deploy` (`wrangler deploy` in `app/`), `smoke` (`scripts/smoke.sh app` with `APP_BASE_URL` and `SLACK_WIRED` from repo variables) |
+| `deploy-doc.yml`  | push to `main` touching `doc/**`, root package or workspace files, or the setup action; manual dispatch | `gate`, `deploy` (doc build, `check:links`, `wrangler deploy` in `doc/`), `smoke` (`scripts/smoke.sh doc` with `DOC_BASE_URL` from a repo variable)                            |
 
 Each deploy workflow starts with a `gate` job that skips the rest, cleanly and green, when the ref is not `main` or when the `CLOUDFLARE_API_TOKEN` or `CLOUDFLARE_ACCOUNT_ID` repository secret is absent, so forks and unconfigured clones stay green. Cloudflare credentials are scoped to the single deploy step. Deploy runs never overlap (a concurrency group per workflow, without cancellation).
 

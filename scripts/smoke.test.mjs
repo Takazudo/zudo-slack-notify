@@ -44,6 +44,14 @@ const worker = (notifyStatus, notifyCode) => (req, res) => {
 };
 
 describe("smoke.sh app", () => {
+  it("requires APP_BASE_URL (missing or empty) before any network call", async () => {
+    for (const env of [{ APP_BASE_URL: undefined }, { APP_BASE_URL: "" }]) {
+      const r = await smoke("app", env);
+      expect(r.code).not.toBe(0);
+      expect(r.output).toContain("SMOKE FAIL: APP_BASE_URL is required (the deployed API origin)");
+    }
+  });
+
   it("passes on healthz 200 + notify 401", async () => {
     const url = await serve(worker(401, "unauthorized"));
     const r = await smoke("app", { APP_BASE_URL: url });
@@ -90,6 +98,14 @@ describe("smoke.sh app", () => {
 });
 
 describe("smoke.sh doc", () => {
+  it("requires DOC_BASE_URL (missing or empty) before any network call", async () => {
+    for (const env of [{ DOC_BASE_URL: undefined }, { DOC_BASE_URL: "" }]) {
+      const r = await smoke("doc", env);
+      expect(r.code).not.toBe(0);
+      expect(r.output).toContain("SMOKE FAIL: DOC_BASE_URL is required (the deployed docs origin)");
+    }
+  });
+
   const site = (root) => (req, res) => {
     if (req.url === "/") {
       res.writeHead(200, { "content-type": "text/html" });

@@ -161,19 +161,24 @@ describe("push-worker-secrets", () => {
     for (const v of VALUES) expect(h.all()).not.toContain(v);
   });
 
-  it("reads the default path under DROPBOX_ROOT", async () => {
-    const root = path.join(dir, "dropbox");
-    const credDir = path.join(root, "env/zudo-slack-notify/credentials");
-    const { mkdir } = await import("node:fs/promises");
-    await mkdir(credDir, { recursive: true });
-    await writeFile(path.join(credDir, "worker.env"), validLines().join("\n"));
+  it("reads the file named by ZUDO_SLACK_NOTIFY_WORKER_ENV", async () => {
     const h = harness();
-    expect(await h.run(["--dry-run"], { DROPBOX_ROOT: root })).toBe(0);
+    const file = await envFile(validLines());
+    expect(await h.run(["--dry-run"], { ZUDO_SLACK_NOTIFY_WORKER_ENV: file })).toBe(0);
+    expect(h.out.join("")).toContain("SLACK_TARGETS: would set");
   });
 
-  it("errors clearly without DROPBOX_ROOT or a readable file", async () => {
+  it("--env-file wins over ZUDO_SLACK_NOTIFY_WORKER_ENV", async () => {
+    const h = harness();
+    const good = await envFile(validLines());
+    const env = { ZUDO_SLACK_NOTIFY_WORKER_ENV: path.join(dir, "missing.env") };
+    expect(await h.run(["--dry-run", "--env-file", good], env)).toBe(0);
+  });
+
+  it("errors clearly without a configured or readable file", async () => {
     const h = harness();
     expect(await h.run([])).toBe(2);
+    expect(h.err.join("")).toContain("pass --env-file <path> or set ZUDO_SLACK_NOTIFY_WORKER_ENV");
     expect(await h.run(["--env-file", path.join(dir, "missing.env")])).toBe(2);
     expect(await h.run(["--bogus"])).toBe(2);
   });

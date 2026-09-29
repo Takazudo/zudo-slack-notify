@@ -14,7 +14,7 @@ The generic `notify-slack` skill should not learn every repository's npm command
 
 ## Portable local setup
 
-Keep one checkout of `zudo-slack-notify` and set `ZUDO_SLACK_NOTIFY_ROOT` in the shell environment used by local agents. Keep the sender credentials in an env file outside the repo (default `$DROPBOX_ROOT/env/zudo-slack-notify/credentials/sender.env`) holding `ZUDO_SLACK_NOTIFY_URL` and `ZUDO_SLACK_NOTIFY_API_KEY`, and load it with `node --env-file`. The generic skill is short and contains no secrets or fixed filesystem path. The sender imports the same validation code as the Worker, so skill text does not need to reimplement the API contract.
+Keep one checkout of `zudo-slack-notify` and set `ZUDO_SLACK_NOTIFY_ROOT` in the shell environment used by local agents. Keep the sender credentials in an env file outside the repo (for example `$HOME/.config/zudo-slack-notify/sender.env`), point `ZUDO_SLACK_NOTIFY_SENDER_ENV` at it, and have it hold `ZUDO_SLACK_NOTIFY_URL` and `ZUDO_SLACK_NOTIFY_API_KEY`, and load it with `node --env-file`. The generic skill is short and contains no secrets or fixed filesystem path. The sender imports the same validation code as the Worker, so skill text does not need to reimplement the API contract.
 
 Install the skill by placing or linking `skills/notify-slack/` into your own Codex/Claude Code skill setup. This repository does not install or overwrite a personal skill. If your wrapper has a different name, its description should say when to use it and refer to the generic skill for sending.
 
