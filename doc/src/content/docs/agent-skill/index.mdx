@@ -1,0 +1,61 @@
+---
+title: Agent Skill
+description: The notify-slack Claude Code skill, how to install it, and the approval boundary.
+sidebar_position: 5
+---
+
+`skills/notify-slack/SKILL.md` teaches a Claude Code agent to send a notification. The agent supplies the facts of the moment (target, kind, title, message, links); the skill resolves the checkout, loads the sender credentials, and runs the [CLI](../cli/).
+
+## How it runs
+
+- The checkout is found from the environment variable `ZUDO_SLACK_NOTIFY_ROOT`.
+- The sender env file defaults to `$DROPBOX_ROOT/env/zudo-slack-notify/credentials/sender.env`.
+- The skill writes the payload to a JSON file and runs:
+
+```sh
+node --env-file=<sender env file> "$ZUDO_SLACK_NOTIFY_ROOT/app/cli/notify.ts" --file <json>
+```
+
+The key is passed through the env file, never on argv, and the agent never sees the Slack bot token.
+
+## Install
+
+Copy or symlink the skill directory into your Claude Code skills directory:
+
+<Tabs>
+  <TabItem label="Symlink" value="symlink" default>
+    ```sh
+    ln -s "$ZUDO_SLACK_NOTIFY_ROOT/skills/notify-slack" ~/.claude/skills/notify-slack
+    ```
+  </TabItem>
+  <TabItem label="Copy" value="copy">
+    ```sh
+    cp -R "$ZUDO_SLACK_NOTIFY_ROOT/skills/notify-slack" ~/.claude/skills/notify-slack
+    ```
+  </TabItem>
+</Tabs>
+
+A symlink stays current as the checkout updates; a copy needs refreshing. Then set `ZUDO_SLACK_NOTIFY_ROOT` in your shell environment to the checkout path and make sure `sender.env` exists (see [Configure secrets and deploy](../getting-started/secrets-and-deploy/)).
+
+## Project wrappers
+
+The generic skill sends what it is told. A project-specific wrapper knows the procedure, which stage needs a human, and the review URL. `skills/notify-slack/references/project-wrapper.md` describes the pattern:
+
+1. The project skill completes its own checks.
+2. It records the real package, version, commit, and approval location.
+3. It calls `notify-slack` once for the right target.
+4. It records the returned receipt, or the delivery problem, in its own state.
+5. It continues or pauses according to the project's existing process.
+
+## Approval boundary
+
+:::danger[A notification never grants permission]
+A `sent` receipt means a message was posted. It is not approval to publish, merge, deploy, or take any irreversible step. Slack replies, reactions, and elapsed time are not observed by this service and cannot unblock an agent. `source` and `kind` are the agent's own claims, not verified facts.
+:::
+
+## Handling outcomes
+
+- Exit `0`: record the `ts` if replies will thread.
+- Exit `1` or `2`: the message was not sent; report the error and fix the input or setup.
+- Exit `3`: wait at least `Retry-After`, then resend deliberately.
+- Exit `4`: delivery is unknown. Tell the human and check Slack; do not resend blindly.
