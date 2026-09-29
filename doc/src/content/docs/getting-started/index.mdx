@@ -1,23 +1,32 @@
 ---
 title: Getting Started
-description: Stand up your own zudo-slack-notify deployment, from the Slack app to the first message.
+description: Run your own zudo-slack-notify relay, from the Slack app to the first delivered message.
 sidebar_position: 2
 ---
 
-This walk-through takes a fresh checkout to a delivered message. The Worker deploys before Slack is wired, and fails closed until all three secrets exist, so the order below is safe.
-
-1. [Create the Slack app](./slack-app/) from the manifest, install it, and collect the bot token and channel IDs.
-2. [Configure secrets and deploy](./secrets-and-deploy/): generate the relay key, fill the operator store, run `pnpm ops:push-secrets`, and deploy.
-3. [Send the first message](./first-message/) with the CLI and mark the deployment as wired.
-
-:::note[Placeholders]
-Every value in these pages is a placeholder: `C0123456789`, `xoxb-…`, `<your-relay-key>`. Real channel IDs, tokens, and keys never go into git, issues, or logs.
-:::
+This walk-through takes a fresh clone to a message delivered in your own Slack workspace, through your own Cloudflare Worker. The Worker can deploy before Slack is wired: it fails closed until all three secrets exist, so the order below is safe.
 
 ## Prerequisites
 
-- Node.js 24 or later and pnpm (`pnpm install` at the repository root).
-- A Slack workspace where you may install an app.
-- A Cloudflare account that owns the `zudolab.dev` zone, if you deploy the same domains. Forks change the `routes` entries in `app/wrangler.toml` and `doc/wrangler.toml`.
+- A **Cloudflare account**. Any zone you control works for a custom domain, or you can use a free `workers.dev` subdomain.
+- A **Slack workspace** where you may install an app.
+- **Node.js 24 or later** and **pnpm**.
+- A **clone of the repository** (or your fork of it), with dependencies installed:
+
+```sh
+git clone https://github.com/Takazudo/zudo-slack-notify.git
+cd zudo-slack-notify
+pnpm install
+```
+
+## Steps
+
+1. [Create the Slack app](./slack-app/) from the bundled manifest, install it, and collect the bot token and channel IDs.
+2. [Configure secrets and deploy](./secrets-and-deploy/): choose where your Worker lives, generate a relay key, set the three Worker secrets, and deploy.
+3. [Send the first message](./first-message/) with the CLI.
+
+:::note[Placeholders]
+Every value in these pages is a placeholder: `https://notify.example.com`, `C0123456789`, `xoxb-…`, `<your-relay-key>`. Substitute your own values, and keep real tokens and keys out of git, issues, and logs.
+:::
 
 <CategoryNav category="getting-started" />

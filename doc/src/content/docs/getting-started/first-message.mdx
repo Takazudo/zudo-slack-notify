@@ -1,19 +1,32 @@
 ---
 title: Send the first message
-description: Verify the deployment with a dry run and a real message, then mark it wired.
+description: Check the Worker is up, create a sender env file, then dry-run and send a real message.
 sidebar_position: 3
 ---
+
+The examples use `https://notify.example.com` as the origin. Substitute your own custom domain or `workers.dev` hostname.
 
 ## Check the Worker is up
 
 ```sh
-curl https://zudo-slack-notify-app.zudolab.dev/healthz
+curl https://notify.example.com/healthz
 # {"ok":true,"service":"zudo-slack-notify"}
 ```
 
+## Create the sender env file
+
+A sender needs two values: the endpoint URL (your origin plus `/v1/notify`) and the relay key. It never needs the Slack bot token. Put them in a file **outside the repository**, for example `"$HOME/.config/zudo-slack-notify/sender.env"`:
+
+```sh
+ZUDO_SLACK_NOTIFY_URL=https://notify.example.com/v1/notify
+ZUDO_SLACK_NOTIFY_API_KEY=<your-relay-key>
+```
+
+Keeping it outside the checkout means it can never be committed by accident. Restrict it to your user, for example with `chmod 600`.
+
 ## Dry run
 
-A dry run validates and renders the message locally and prints the request plus the Slack payload. No network is used.
+A dry run validates and renders the message locally and prints the request plus the Slack payload it would produce. No network is used and no env file is needed.
 
 ```sh
 cd app
@@ -25,11 +38,11 @@ node cli/notify.ts --file examples/simple.json --dry-run
 Load the sender env file with `node --env-file` so the key never appears on the command line:
 
 ```sh
-node --env-file="$DROPBOX_ROOT/env/zudo-slack-notify/credentials/sender.env" \
+node --env-file="$HOME/.config/zudo-slack-notify/sender.env" \
   cli/notify.ts --target dev --message "Hello from zudo-slack-notify." --kind success
 ```
 
-Success exits `0` and prints a receipt:
+Use one of the aliases you put in `SLACK_TARGETS`. Success exits `0` and prints a receipt:
 
 ```json
 {
@@ -42,16 +55,10 @@ Success exits `0` and prints a receipt:
 }
 ```
 
-If it fails, the exit code and `error.code` tell you why. See the [error catalog](../../api/errors/) and [Troubleshooting](../../operations/troubleshooting/).
+If it fails, the exit code and `error.code` tell you why. See the [error catalog](../../api/errors/) and [Troubleshooting](../../operations/troubleshooting/). A `503 server_misconfigured` means one of the three Worker secrets is missing or malformed.
 
-## Mark the deployment as wired
+From here, see the [CLI](../../cli/) for every flag, [POST /v1/notify](../../api/notify/) to call the API from your own code, and the [Agent skill](../../agent-skill/) to let an agent send notifications.
 
-The post-deploy smoke test (`scripts/smoke.sh app`) sends an unauthenticated `POST /v1/notify`. Before Slack is wired the expected answer is `503 server_misconfigured`; once wired it must be `401`. The GitHub repository variable `SLACK_WIRED` tells the smoke test which to accept: while it is not `true`, a `503 server_misconfigured` passes, and once it is `true` only `401` passes.
-
-After the first message is delivered, set the variable:
-
-```sh
-gh variable set SLACK_WIRED --body true
-```
-
-From then on a `503` in the smoke test fails the run. This is also the moment to consider adding `[secrets] required` to `app/wrangler.toml`; see [Secrets and rotation](../../operations/secrets/). The smoke script itself is described under [Smoke tests](../../development/#smoke-tests).
+:::note[If you deploy with GitHub Actions]
+The "Deploy app" workflow's smoke check accepts `503 server_misconfigured` from `POST /v1/notify` until Slack is wired. After this first message is delivered, set the repository variable `SLACK_WIRED=true` (for example `gh variable set SLACK_WIRED --body true`) so a later `503` fails the run instead. See [Secrets and rotation](../../operations/secrets/) for details, including when to add `[secrets] required` to `app/wrangler.toml`.
+:::
