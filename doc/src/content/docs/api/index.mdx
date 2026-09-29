@@ -4,7 +4,7 @@ description: The HTTP surface of the zudo-slack-notify Worker.
 sidebar_position: 3
 ---
 
-Base URL: `https://zudo-slack-notify-app.zudolab.dev`
+Base URL: your deployment's origin, for example `https://notify.example.com`
 
 | Method | Path         | Auth   | Purpose                              |
 | ------ | ------------ | ------ | ------------------------------------ |
@@ -16,7 +16,7 @@ Any other path returns `404 not_found`. A wrong method on a known path returns `
 ## GET /healthz
 
 ```sh
-curl https://zudo-slack-notify-app.zudolab.dev/healthz
+curl https://notify.example.com/healthz
 ```
 
 ```json

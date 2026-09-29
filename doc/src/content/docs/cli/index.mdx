@@ -10,18 +10,24 @@ The sender is `app/cli/notify.ts`. It needs Node.js 24 or later, which runs the 
 
 | Variable                    | Meaning                                                                |
 | --------------------------- | ---------------------------------------------------------------------- |
-| `ZUDO_SLACK_NOTIFY_URL`     | Full endpoint, ending in `/v1/notify`                                  |
+| `ZUDO_SLACK_NOTIFY_URL`     | Full endpoint: your origin plus `/v1/notify`, for example `https://notify.example.com/v1/notify` |
 | `ZUDO_SLACK_NOTIFY_API_KEY` | The relay key (32 to 256 printable ASCII characters), never the Slack token |
 
 The URL must be HTTPS, with no credentials, query, or fragment. Plain HTTP is accepted only for `localhost`, `127.0.0.1`, and `[::1]`, for local development.
 
 ## Keep the key off argv
 
-Put the two variables in the sender env file and load it with `node --env-file`. The key then never appears on the command line, in shell history, or in the process list:
+Put the two variables in a sender env file kept outside the repository, for example `"$HOME/.config/zudo-slack-notify/sender.env"`, and load it with `node --env-file`. The key then never appears on the command line, in shell history, or in the process list:
 
 ```sh
-node --env-file="$DROPBOX_ROOT/env/zudo-slack-notify/credentials/sender.env" \
+node --env-file="$HOME/.config/zudo-slack-notify/sender.env" \
   "$ZUDO_SLACK_NOTIFY_ROOT/app/cli/notify.ts" --file notification.json
+```
+
+The examples below use the same path, defined once as `SENDER_ENV`:
+
+```sh
+SENDER_ENV="$HOME/.config/zudo-slack-notify/sender.env"
 ```
 
 The CLI has no `--api-key` flag on purpose.
@@ -31,18 +37,18 @@ The CLI has no `--api-key` flag on purpose.
 <Tabs>
   <TabItem label="Message flags" value="flags" default>
     ```sh
-    node --env-file=.env cli/notify.ts \
+    node --env-file="$SENDER_ENV" cli/notify.ts \
       --target dev --message "Build finished." --kind success
     ```
   </TabItem>
   <TabItem label="JSON file" value="file">
     ```sh
-    node --env-file=.env cli/notify.ts --file examples/npm-approval.json
+    node --env-file="$SENDER_ENV" cli/notify.ts --file examples/npm-approval.json
     ```
   </TabItem>
   <TabItem label="Standard input" value="stdin">
     ```sh
-    node --env-file=.env cli/notify.ts --file - < notification.json
+    node --env-file="$SENDER_ENV" cli/notify.ts --file - < notification.json
     ```
   </TabItem>
   <TabItem label="Dry run" value="dry">

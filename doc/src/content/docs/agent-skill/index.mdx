@@ -9,11 +9,11 @@ sidebar_position: 5
 ## How it runs
 
 - The checkout is found from the environment variable `ZUDO_SLACK_NOTIFY_ROOT`.
-- The sender env file defaults to `$DROPBOX_ROOT/env/zudo-slack-notify/credentials/sender.env`.
+- The sender env file is found from `ZUDO_SLACK_NOTIFY_SENDER_ENV`. There is no default; if either variable is missing, the skill reports the missing configuration instead of guessing.
 - The skill writes the payload to a JSON file and runs:
 
 ```sh
-node --env-file=<sender env file> "$ZUDO_SLACK_NOTIFY_ROOT/app/cli/notify.ts" --file <json>
+node --env-file="$ZUDO_SLACK_NOTIFY_SENDER_ENV" "$ZUDO_SLACK_NOTIFY_ROOT/app/cli/notify.ts" --file <json>
 ```
 
 The key is passed through the env file, never on argv, and the agent never sees the Slack bot token.
@@ -25,17 +25,24 @@ Copy or symlink the skill directory into your Claude Code skills directory:
 <Tabs>
   <TabItem label="Symlink" value="symlink" default>
     ```sh
-    ln -s "$ZUDO_SLACK_NOTIFY_ROOT/skills/notify-slack" ~/.claude/skills/notify-slack
+    ln -s "$ZUDO_SLACK_NOTIFY_ROOT/skills/notify-slack" "$HOME/.claude/skills/notify-slack"
     ```
   </TabItem>
   <TabItem label="Copy" value="copy">
     ```sh
-    cp -R "$ZUDO_SLACK_NOTIFY_ROOT/skills/notify-slack" ~/.claude/skills/notify-slack
+    cp -R "$ZUDO_SLACK_NOTIFY_ROOT/skills/notify-slack" "$HOME/.claude/skills/notify-slack"
     ```
   </TabItem>
 </Tabs>
 
-A symlink stays current as the checkout updates; a copy needs refreshing. Then set `ZUDO_SLACK_NOTIFY_ROOT` in your shell environment to the checkout path and make sure `sender.env` exists (see [Configure secrets and deploy](../getting-started/secrets-and-deploy/)).
+A symlink stays current as the checkout updates; a copy needs refreshing. Then set both variables in your shell profile:
+
+```sh
+export ZUDO_SLACK_NOTIFY_ROOT="<path to your checkout>"
+export ZUDO_SLACK_NOTIFY_SENDER_ENV="$HOME/.config/zudo-slack-notify/sender.env"
+```
+
+The sender env file must exist; see [Getting Started](../getting-started/first-message/) for creating it and sending a first message.
 
 ## Project wrappers
 
@@ -48,7 +55,7 @@ The generic skill sends what it is told. A project-specific wrapper knows the pr
 5. It continues or pauses according to the project's existing process. A failed notification does not change candidate state, and a successful one does not approve anything.
 6. Once the real workflow confirms publication, it may send a `success` follow-up in the original thread, if the original receipt exists.
 
-Every example value in `app/examples/` must be replaced with actual facts; do not copy "checks passed" as an assumption. This repository does not install or overwrite a personal skill.
+Every example value in `app/examples/` must be replaced with actual facts; do not copy "checks passed" as an assumption. Installing the skill is up to you; the repository never modifies your skills directory.
 
 ## Approval boundary
 
