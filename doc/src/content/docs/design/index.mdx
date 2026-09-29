@@ -24,7 +24,7 @@ The consequences are accepted: no offline buffering, no history, no deduplicatio
 
 ## Fail closed and secrets
 
-All three values (`NOTIFY_API_KEY`, `SLACK_BOT_TOKEN`, `SLACK_TARGETS`) are Worker secrets. `SLACK_TARGETS` is a secret and not a `[vars]` entry because this repository is public and channel IDs stay out of git. If any secret is missing or malformed the API answers `503 server_misconfigured` before authenticating or contacting Slack. That is what lets the first deploy happen before the Slack app exists.
+All three values (`NOTIFY_API_KEY`, `SLACK_BOT_TOKEN`, `SLACK_TARGETS`) are Worker secrets. `SLACK_TARGETS` is a secret and not a `[vars]` entry so the source can be public or forked without exposing channel IDs. If any secret is missing or malformed the API answers `503 server_misconfigured` before authenticating or contacting Slack. That is what lets the first deploy happen before the Slack app exists.
 
 ## Delivery honesty
 
