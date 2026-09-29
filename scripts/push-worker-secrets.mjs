@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// Uploads the Worker runtime secrets from the operator store with ONE
+// Uploads the Worker runtime secrets from a local env file with ONE
 // `wrangler secret bulk` call. Never prints values; only key names and status.
 //   pnpm ops:push-secrets [--env-file <path>] [--dry-run]
-// Default file: $DROPBOX_ROOT/env/zudo-slack-notify/credentials/worker.env
+// Env file: --env-file <path>, else $ZUDO_SLACK_NOTIFY_WORKER_ENV.
 import { spawn as nodeSpawn } from "node:child_process";
 import { realpathSync } from "node:fs";
 import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -102,13 +102,10 @@ export async function main({
     return 2;
   }
 
-  let envFile = opts.envFile;
+  const envFile = opts.envFile || env.ZUDO_SLACK_NOTIFY_WORKER_ENV;
   if (!envFile) {
-    if (!env.DROPBOX_ROOT) {
-      err("error: set DROPBOX_ROOT or pass --env-file <path>");
-      return 2;
-    }
-    envFile = path.join(env.DROPBOX_ROOT, "env/zudo-slack-notify/credentials/worker.env");
+    err("error: pass --env-file <path> or set ZUDO_SLACK_NOTIFY_WORKER_ENV");
+    return 2;
   }
 
   let text;

@@ -84,6 +84,8 @@ jobs:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
       - name: Smoke-test the deployed Worker
         env:
+          # Forks: set the APP_BASE_URL repo variable to your deployed API origin.
+          APP_BASE_URL: ${{ vars.APP_BASE_URL }}
           # Set the repo variable to "true" once Slack is wired; it retires the
           # 503 server_misconfigured bootstrap tolerance.
           SLACK_WIRED: ${{ vars.SLACK_WIRED }}

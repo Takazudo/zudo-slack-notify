@@ -72,4 +72,7 @@ jobs:
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
       - name: Smoke-test the deployed docs
+        env:
+          # Forks: set the DOC_BASE_URL repo variable to your deployed docs origin.
+          DOC_BASE_URL: ${{ vars.DOC_BASE_URL }}
         run: bash scripts/smoke.sh doc

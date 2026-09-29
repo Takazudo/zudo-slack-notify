@@ -1,15 +1,17 @@
 #!/usr/bin/env bash
-# Post-deploy smoke checks against the deployed origins.
+# Post-deploy smoke checks against a deployed origin. There are no built-in origins.
 #   scripts/smoke.sh app|doc
-# Env (all optional):
-#   APP_BASE_URL / DOC_BASE_URL          override the origins (local runs, tests)
+# Env:
+#   APP_BASE_URL                         required for `app`: the deployed API origin
+#   DOC_BASE_URL                         required for `doc`: the deployed docs origin
+# Env (optional):
 #   SLACK_WIRED                          "true" once Slack is wired: only 401 passes on POST /v1/notify
 #   SMOKE_RETRY_WINDOW_SECONDS           first-deploy tolerance window (default 120)
 #   SMOKE_RETRY_INTERVAL_SECONDS         pause between attempts (default 5)
 set -uo pipefail
 
-APP_BASE_URL="${APP_BASE_URL:-https://zudo-slack-notify-app.zudolab.dev}"
-DOC_BASE_URL="${DOC_BASE_URL:-https://zudo-slack-notify.zudolab.dev}"
+APP_BASE_URL="${APP_BASE_URL:-}"
+DOC_BASE_URL="${DOC_BASE_URL:-}"
 WINDOW="${SMOKE_RETRY_WINDOW_SECONDS:-120}"
 INTERVAL="${SMOKE_RETRY_INTERVAL_SECONDS:-5}"
 SLACK_WIRED="${SLACK_WIRED:-}"
@@ -69,6 +71,7 @@ probe() {
 status_is_200() { [ "$CURL_RC" -eq 0 ] && [ "$STATUS" = "200" ]; }
 
 smoke_app() {
+  [ -n "$APP_BASE_URL" ] || fail "APP_BASE_URL is required (the deployed API origin)"
   echo "checking app origin: $APP_BASE_URL"
   probe GET "$APP_BASE_URL/healthz" worker_answered
   [ "$STATUS" = "200" ] || fail "GET /healthz returned $STATUS, expected 200"
@@ -96,6 +99,7 @@ smoke_app() {
 }
 
 smoke_doc() {
+  [ -n "$DOC_BASE_URL" ] || fail "DOC_BASE_URL is required (the deployed docs origin)"
   echo "checking doc origin: $DOC_BASE_URL"
   probe GET "$DOC_BASE_URL/" status_is_200
   grep -q 'zudo-slack-notify' <<<"$BODY" || fail "GET / has no site marker 'zudo-slack-notify'"
