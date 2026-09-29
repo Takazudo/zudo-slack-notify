@@ -1,0 +1,19 @@
+# Cloudflare Workers Static Assets configuration for the zudo-slack-notify docs site.
+#
+# Fully static site (no SSR routes), so `main` and `nodejs_compat` are omitted.
+# `[assets] directory` is relative to this file, so "./dist" is doc/dist/.
+
+name = "zudo-slack-notify"
+
+compatibility_date = "2026-09-27"
+
+# Prevents serving on the *.workers.dev route.
+workers_dev = false
+
+[assets]
+directory = "./dist"
+not_found_handling = "404-page"
+
+[[routes]]
+pattern = "zudo-slack-notify.zudolab.dev"
+custom_domain = true
