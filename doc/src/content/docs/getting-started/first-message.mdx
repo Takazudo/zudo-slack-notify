@@ -46,7 +46,7 @@ If it fails, the exit code and `error.code` tell you why. See the [error catalog
 
 ## Mark the deployment as wired
 
-The post-deploy smoke test (`scripts/smoke.sh`) sends an unauthenticated `POST /v1/notify`. Before Slack is wired the expected answer is `503 server_misconfigured`; once wired it must be `401 unauthorized`. The GitHub repository variable `SLACK_WIRED` tells the smoke test which to accept.
+The post-deploy smoke test (`scripts/smoke.sh app`) sends an unauthenticated `POST /v1/notify`. Before Slack is wired the expected answer is `503 server_misconfigured`; once wired it must be `401`. The GitHub repository variable `SLACK_WIRED` tells the smoke test which to accept: while it is not `true`, a `503 server_misconfigured` passes, and once it is `true` only `401` passes.
 
 After the first message is delivered, set the variable:
 
@@ -54,4 +54,4 @@ After the first message is delivered, set the variable:
 gh variable set SLACK_WIRED --body true
 ```
 
-From then on a `503` in the smoke test fails the run. This is also the moment to consider adding `[secrets] required` to `app/wrangler.toml`; see [Secrets and rotation](../../operations/secrets/).
+From then on a `503` in the smoke test fails the run. This is also the moment to consider adding `[secrets] required` to `app/wrangler.toml`; see [Secrets and rotation](../../operations/secrets/). The smoke script itself is described under [Smoke tests](../../development/#smoke-tests).
