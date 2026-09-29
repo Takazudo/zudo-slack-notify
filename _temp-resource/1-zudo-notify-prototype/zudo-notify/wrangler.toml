@@ -1,0 +1,21 @@
+name = "zudo-notify"
+main = "src/index.ts"
+# Wrangler 4.85.0 bundles workerd 1.20260424.1. Keep this date supported
+# by the pinned local runtime; review both pins together when upgrading.
+compatibility_date = "2026-04-01"
+workers_dev = true
+preview_urls = false
+
+# No nodejs_compat, storage bindings, queue, or framework is required.
+# Required runtime secrets: NOTIFY_API_KEY and SLACK_BOT_TOKEN.
+# We deliberately omit [secrets].required so the first `wrangler deploy`
+# can create the Worker before `wrangler secret bulk` uploads both values.
+# The handler must fail closed until its runtime configuration is complete.
+
+[vars]
+# Replace the inert example channel IDs, then invite the bot to each channel.
+# Callers select an alias; they cannot supply arbitrary Slack channel IDs.
+SLACK_TARGETS = '{"releases":"C0123456789","dev":"C0123456789"}'
+
+[observability]
+enabled = true
